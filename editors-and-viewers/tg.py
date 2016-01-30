@@ -15,19 +15,26 @@ class Node():
     self.links = links
 
 class TextGraph(list):
-  def __init__(self,fileText):
-    self.fileText = fileText
+  def __init__(self,fileName):
+    self.fileName = fileName
     self.edited = False
+    self.orphans = []
     nodeId = 0
-    with open(fileText) as fd:
-      try:
-        table = json.load(fd)
-      except ValueError as e:
-        print("Cannot load file "+fileText)
-        sys.exit(str(e))
-      for (text,links) in table:
-        self.append(Node(nodeId,text,links))
-        nodeId += 1
+    try:
+      with open(fileName) as fd:
+        try:
+          table = json.load(fd)
+        except ValueError as e:
+          print("Cannot load file "+fileName)
+          sys.exit(str(e))
+        for (text,links) in table:
+          self.append(Node(nodeId,text,links))
+          nodeId += 1
+    except FileNotFoundError:
+      self.append(Node(0,"",[]))
+    for node in self:
+      if self.isOrphan(node):
+        self.orphans.append(node.nodeId)
 
   def getBacklinks(self,nodeId):
     backlinks = []
@@ -36,6 +43,21 @@ class TextGraph(list):
         backlinks.append(node)
     return backlinks
 
+  def isOrphan(self,node):
+    if not node.links and not self.getBacklinks(node.nodeId):
+      return True
+    else:
+      return False
+
+  def newNode(self):
+    if self.orphans:
+      index = self.orphans.pop()
+    else:
+      index = len(self)
+    node = Node(index,"",[])
+    self[index] = node
+    return node
+
   def save(self):
     # We format the output to privide better diff support.
     serialized = "["
@@ -43,7 +65,7 @@ class TextGraph(list):
       serialized += json.dumps([node.text,node.links])
       serialized += "\n,"
     serialized = serialized[:-2] + "]\n"
-    with open(self.fileText,"w") as fd:
+    with open(self.fileName,"w") as fd:
       fd.write(serialized)
 
 class GraphView(urwid.Pile):
@@ -65,6 +87,7 @@ class GraphView(urwid.Pile):
     # main pile
     super(GraphView,self).__init__([self.clipboard,self.backlinks,self.currentNodeWidget,self.links,self.commandBar])
     self.update()
+    self.focus_item = self.currentNodeWidget
 
   def update(self):
     # clipboard
@@ -97,6 +120,16 @@ class GraphView(urwid.Pile):
       self.focus_item = self.commandBar
     elif key in keybindings['jump-to-node-edit-box']:
       self.focus_item = self.currentNodeWidget
+    elif key in keybindings['move-down-one-mega-widget']:
+      try:
+        self.focus_position = self.focus_position + 1
+      except IndexError:
+        pass
+    elif key in keybindings['move-up-one-mega-widget']:
+      try:
+        self.focus_position = self.focus_position - 1
+      except IndexError:
+        pass
     else:
       return super(GraphView,self).keypress(size,key)
 
@@ -188,10 +221,11 @@ class BackLinksList(NodeNavigator):
 
   def keypress(self,size,key):
     if key in keybindings['new-node']:
-      nodeId = len(self.view.graph)
-      node = Node(nodeId,"",[self.view.selection])
-      self.view.graph.append(node)
-      self.view.selection = nodeId
+      self.view.graph[self.view.selection].text = self.view.currentNode.edit_text
+
+      node = self.view.graph.newNode()
+      node.links = [self.view.selection]
+      self.view.selection = node.nodeId
       self.view.update()
       self.view.focus_item = self.view.currentNodeWidget
     if key in ['right']:
@@ -236,16 +270,15 @@ class LinksList(NodeNavigator):
         self.view.update()
         self.focus_position = fcp + 1
     elif key in keybindings['new-node']:
-      nodeId = len(self.view.graph)
-      node = Node(nodeId,"",[])
-      self.view.graph.append(node)
-      self.view.graph[self.view.selection].links.append(nodeId)
-      self.view.selection = nodeId
+      self.view.graph[self.view.selection].text = self.view.currentNode.edit_text
+      node = self.view.graph.newNode()
+      self.view.graph[self.view.selection].links.append(node.nodeId)
+      self.view.selection = node.nodeId
       self.view.update()
       self.view.focus_item = self.view.currentNodeWidget
-    if key in ['left']:
+    elif key in ['left']:
       self.view.focus_item = self.view.backlinks
-    if key in keybindings['link-or-back-link-last-stack-item']:
+    elif key in keybindings['link-or-back-link-last-stack-item']:
       if self.view.clipboard.nodes:
         try:
           fcp = self.focus_position
@@ -256,6 +289,18 @@ class LinksList(NodeNavigator):
         self.view.graph.edited = True
         self.view.update()
         self.focus_position = fcp + 1
+    elif key in keybindings['remove-link-or-backlink']:
+      try:
+        fcp = self.focus_position
+        node = self.nodes[fcp]
+        selectedNode = self.view.graph[self.view.selection]
+        selectedNode.links.remove(node.nodeId)
+        if self.view.graph.isOrphan(node):
+          node.text = ""
+          self.view.graph.orphans.append(node.nodeId)
+        self.view.update()
+      except IndexError:
+        pass
     else:
       return super(LinksList,self).keypress(size,key)
 
@@ -270,8 +315,12 @@ class CommandBar(urwid.Filler):
       return super(CommandBar,self).keypress(size,key)
     com = self.edit.edit_text
     if "w" in com:
-      self.view.graph.save()
-      self.view.graph.edited = False
+      try:
+        self.view.graph[self.view.selection].text = self.view.currentNode.edit_text
+        self.view.graph.save()
+        self.view.graph.edited = False
+      except FileNotFoundError as e:
+        self.edit.set_caption("Unable to save:"+str(e)+"\n:")
     if "q" in com:
       if self.view.graph.edited and "!" not in com:
         self.edit.set_caption("Not quiting. Save your work first, or use 'q!'\n:")
@@ -298,8 +347,11 @@ keybindings = {
  'move-node-up' : ['ctrl up'],
  'move-node-down' : ['ctrl down'],
  'new-node' : ['n'],
+ 'remove-link-or-backlink' : ['d','delete'],
  'jump-to-command-bar' : [':'],
  'jump-to-node-edit-box' : ['esc'],
+ 'move-up-one-mega-widget' : ['meta up'],
+ 'move-down-one-mega-widget' : ['meta down'],
  }
 pallet = [('backlink_selected', 'white', 'dark blue')
          ,('link_selected', 'white', 'dark red')
