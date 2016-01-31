@@ -3,10 +3,48 @@
 import sys
 import json
 import optparse
+import copy
 try:
   import urwid
 except ImportError:
   sys.exit("The urwid TUI toolkit is required to run this program. On debian based systems you need to install python3-urwid. On other systems you'll have to search the web.")
+
+def showErrorDialog(error):
+  # http://stackoverflow.com/questions/12876335/urwid-how-to-see-errors
+  import tkinter as tk
+  root = tk.Tk()
+  window = tk.Label(root, text=error)
+  window.pack()
+  root.mainloop()
+
+class RingBuffer():
+  def __init__(self,maxlen):
+    self.maxlen = maxlen
+    self._list = [None]*maxlen
+    self.index = 0
+
+  def incIndex(self):
+    self.index += 1
+    if self.index >= self.maxlen:
+      self.index = 0
+
+  def decIndex(self):
+    self.index -= 1
+    if self.index < 0:
+      self.index = self.maxlen - 1
+
+  def append(self,item):
+    self.incIndex()
+    self._list[self.index] = item
+
+  def pop(self):
+    self.decIndex()
+    item = self._list[self.index]
+    return item
+
+  def popForward(self):
+    self.incIndex()
+    return self._list[self.index]
 
 class Node():
   def __init__(self,nodeId,text,links):
@@ -17,8 +55,9 @@ class Node():
 class TextGraph(list):
   def __init__(self,fileName):
     self.fileName = fileName
-    self.edited = False
-    self.orphans = []
+    self._edited = False
+    self.history = RingBuffer(20)
+    self.deleted = []
     nodeId = 0
     try:
       with open(fileName) as fd:
@@ -33,8 +72,35 @@ class TextGraph(list):
     except FileNotFoundError:
       self.append(Node(0,"",[]))
     for node in self:
-      if self.isOrphan(node):
-        self.orphans.append(node.nodeId)
+      if node.text is None:
+        self.deleted.append(node.nodeId)
+    self.history.append(copy.deepcopy(self))
+
+  @property
+  def edited(self):
+    return self._edited
+
+  @edited.setter
+  def edited(self,value):
+    if value:
+      self.history.append(copy.deepcopy(self))
+    self._edited = value
+
+  def undo(self):
+    previousState = self.history.pop()
+    if not previousState is None:
+      self.resetState(previousState)
+
+  def redo(self):
+    precedingState = self.history.popForward()
+    if not precedingState is None:
+      self.resetState(precedingState)
+
+  def resetState(self,state):
+    self._edited = True
+    self.clear()
+    self.extend(state)
+    self.deleted = state.deleted
 
   def getBacklinks(self,nodeId):
     backlinks = []
@@ -43,19 +109,21 @@ class TextGraph(list):
         backlinks.append(node)
     return backlinks
 
-  def isOrphan(self,node):
-    if not node.links and not self.getBacklinks(node.nodeId):
-      return True
-    else:
-      return False
+  def getTree(self,nodeId):
+    node = self[nodeId]
+    tree = set([node.nodeId])
+    for link in node.links:
+      if not link in tree:
+        tree.update(self.getTree(link))
+    return tree
 
   def newNode(self):
-    if self.orphans:
-      index = self.orphans.pop()
+    if self.deleted:
+      node = Node(self.deleted.pop(),"",[])
+      self[index] = node
     else:
-      index = len(self)
-    node = Node(index,"",[])
-    self[index] = node
+      node = Node(len(self),"",[])
+      self.append(node)
     return node
 
   def save(self):
@@ -70,6 +138,7 @@ class TextGraph(list):
 
 class GraphView(urwid.Pile):
   def __init__(self,graph):
+    self.mode = 'command-mode'
     self.graph = graph
     self._selection = 0
     self.history = []
@@ -102,6 +171,13 @@ class GraphView(urwid.Pile):
       nodes.append(self.graph[nodeId])
     self.links.update(nodes)
 
+  def recordChanges(self,markEdited=True):
+    newText = self.currentNode.edit_text
+    if self.graph[self.selection].text != newText:
+      self.graph[self.selection].text = newText
+      if markEdited:
+        self.graph.edited = True
+
   @property
   def selection(self):
     return self._selection
@@ -112,14 +188,10 @@ class GraphView(urwid.Pile):
     self._selection = value
 
   def keypress(self,size,key):
-    if key in keybindings["back"]:
-      if self.history:
-        self._selection = self.history.pop()
-        self.update()
-    elif key in keybindings['jump-to-command-bar'] and self.focus_item != self.currentNodeWidget:
-      self.focus_item = self.commandBar
-    elif key in keybindings['jump-to-node-edit-box']:
+    if key in keybindings['jump-to-node-edit-box']:
       self.focus_item = self.currentNodeWidget
+    if key in keybindings['command-mode']:
+      self.mode = 'command-mode'
     elif key in keybindings['move-down-one-mega-widget']:
       try:
         self.focus_position = self.focus_position + 1
@@ -130,6 +202,40 @@ class GraphView(urwid.Pile):
         self.focus_position = self.focus_position - 1
       except IndexError:
         pass
+    elif self.mode == 'command-mode' or (self.focus_item != self.currentNodeWidget  and self.focus_item != self.commandBar):
+      if key in keybindings["back"]:
+        if self.history:
+          self._selection = self.history.pop()
+          self.update()
+      elif key in keybindings['move-to-node-zero']:
+        self.recordChanges()
+        self.selection = 0
+        self.update()
+        self.focus_item = self.currentNodeWidget
+      #TODO elif key in keybindings['search-nodes']:
+      elif key in keybindings['jump-to-command-bar']:
+        self.focus_item = self.commandBar
+      elif key in keybindings['insert-mode']:
+        self.mode = 'insert-mode'
+        if self.focus_item != self.commandBar and self.focus_item != self.currentNodeWidget:
+          return super(GraphView,self).keypress(size,key)
+      elif key in keybindings['command-mode.up']:
+        return super(GraphView,self).keypress(size,'up')
+      elif key in keybindings['command-mode.down']:
+        return super(GraphView,self).keypress(size,'down')
+      elif key in keybindings['command-mode.left']:
+        return super(GraphView,self).keypress(size,'left')
+      elif key in keybindings['command-mode.right']:
+        return super(GraphView,self).keypress(size,'right')
+      elif key in keybindings['command-mode.undo']:
+        self.recordChanges()
+        self.graph.undo()
+        self.update()
+      elif key in keybindings['command-mode.redo']:
+        self.graph.redo()
+        self.update()
+      else:
+        return super(GraphView,self).keypress(size,key)
     else:
       return super(GraphView,self).keypress(size,key)
 
@@ -198,14 +304,12 @@ class NodeNavigator(NodeList):
     super(NodeNavigator,self).__init__(selectionCollor,alignment)
 
   def keypress(self,size,key):
-    if key in [self.alignment,'enter']:
+    if key in [self.alignment,'enter'] or key in keybindings['insert-mode']:
       if self.nodes:
-        newText = self.view.currentNode.edit_text
-        if self.view.graph[self.view.selection].text != newText:
-          self.view.graph[self.view.selection].text = newText
-          self.view.graph.edited = True
+        self.view.recordChanges()
         self.view.selection = self.nodes[self.focus_position].nodeId
         self.view.update()
+        self.view.focus_item = self.view.currentNodeWidget
     if key in keybindings["add-to-stack"]:
       self.view.clipboard.nodes.append(self.nodes[self.focus_position])
       fcp = self.focus_position
@@ -221,16 +325,20 @@ class BackLinksList(NodeNavigator):
 
   def keypress(self,size,key):
     if key in keybindings['new-node']:
-      self.view.graph[self.view.selection].text = self.view.currentNode.edit_text
 
       node = self.view.graph.newNode()
       node.links = [self.view.selection]
+      self.view.recordChanges(markEdited=False)
       self.view.selection = node.nodeId
+      self.view.graph.edited = True
       self.view.update()
       self.view.focus_item = self.view.currentNodeWidget
     if key in ['right']:
       self.view.focus_item = self.view.links
-      self.view.links.focus_position = 0
+      try:
+        self.view.links.focus_position = 0
+      except IndexError:
+        pass
     if key in keybindings['link-or-back-link-last-stack-item']:
       if self.view.clipboard.nodes:
         node = self.view.clipboard.nodes.pop()
@@ -238,6 +346,15 @@ class BackLinksList(NodeNavigator):
         self.view.graph.edited = True
         self.view.update()
         self.focus_position = self.nodes.index(node)
+    elif key in keybindings['remove-link-or-backlink']:
+      try:
+        fcp = self.focus_position
+        node = self.nodes[fcp]
+        node.links.remove(self.view.selection)
+        self.view.graph.edited = True
+        self.view.update()
+      except IndexError:
+        pass
     else:
       return super(BackLinksList,self).keypress(size,key)
 
@@ -270,10 +387,11 @@ class LinksList(NodeNavigator):
         self.view.update()
         self.focus_position = fcp + 1
     elif key in keybindings['new-node']:
-      self.view.graph[self.view.selection].text = self.view.currentNode.edit_text
+      self.view.recordChanges(markEdited=False)
       node = self.view.graph.newNode()
       self.view.graph[self.view.selection].links.append(node.nodeId)
       self.view.selection = node.nodeId
+      self.view.graph.edited = True
       self.view.update()
       self.view.focus_item = self.view.currentNodeWidget
     elif key in ['left']:
@@ -295,9 +413,7 @@ class LinksList(NodeNavigator):
         node = self.nodes[fcp]
         selectedNode = self.view.graph[self.view.selection]
         selectedNode.links.remove(node.nodeId)
-        if self.view.graph.isOrphan(node):
-          node.text = ""
-          self.view.graph.orphans.append(node.nodeId)
+        self.view.graph.edited = True
         self.view.update()
       except IndexError:
         pass
@@ -316,7 +432,7 @@ class CommandBar(urwid.Filler):
     com = self.edit.edit_text
     if "w" in com:
       try:
-        self.view.graph[self.view.selection].text = self.view.currentNode.edit_text
+        self.view.recordChanges()
         self.view.graph.save()
         self.view.graph.edited = False
       except FileNotFoundError as e:
@@ -348,10 +464,20 @@ keybindings = {
  'move-node-down' : ['ctrl down'],
  'new-node' : ['n'],
  'remove-link-or-backlink' : ['d','delete'],
+ 'move-to-node-zero' : ['.'],
  'jump-to-command-bar' : [':'],
  'jump-to-node-edit-box' : ['esc'],
  'move-up-one-mega-widget' : ['meta up'],
  'move-down-one-mega-widget' : ['meta down'],
+ 'command-mode' : ['esc'],
+ 'command-mode.up' : ['k'],
+ 'command-mode.down' : ['j'],
+ 'command-mode.left' : ['h'],
+ 'command-mode.right' : ['l'],
+ 'command-mode.undo' : ['u'],
+ 'command-mode.redo' : ['ctrl r'],
+ 'insert-mode' : ['i'],
+ 'search-mode' : ['/'],
  }
 pallet = [('backlink_selected', 'white', 'dark blue')
          ,('link_selected', 'white', 'dark red')
