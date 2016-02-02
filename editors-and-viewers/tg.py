@@ -23,6 +23,9 @@ class Node():
     self.text = text
     self.links = links
 
+  def __repr__(self):
+    return str((self.nodeId,self.text,self.links))
+
 class TextGraph(list):
   def __init__(self,fileName):
     self.fileName = fileName
@@ -53,7 +56,6 @@ class TextGraph(list):
 
   def stageNode(self,node):
     self.stagedNodes.append(copy.deepcopy(node))
-    self[node.nodeId] = node
 
   def applyChanges(self):
     didNow = []
@@ -63,11 +65,12 @@ class TextGraph(list):
         self.deleted.append(node)
       elif node.nodeId in self.deleted:
         self.deleted.remove(node.nodeId)
-      didNow.append((self[node.nodeId],node))
       prevState = self[node.nodeId]
+      didNow.append((copy.deepcopy(prevState),copy.deepcopy(node)))
       if not (prevState.text == node.text and prevState.links == node.links):
         didSomething = True
-        self[node.nodeId] = node
+        prevState.text = node.text
+        prevState.links = copy.copy(node.links)
     if didSomething:
       self.undone = []
       self.stagedNodes = []
@@ -81,7 +84,9 @@ class TextGraph(list):
       return
     self.edited = True
     for (prevState,postState) in transaction:
-      self[prevState.nodeId] = prevState
+      currentState = self[prevState.nodeId]
+      currentState.text = prevState.text
+      currentState.links = copy.copy(prevState.links)
     self.undone.append(transaction)
 
   def redo(self):
@@ -91,7 +96,9 @@ class TextGraph(list):
       return
     self.edited = True
     for (prevState,postState) in transaction:
-      self[postState.nodeId] = postState
+      currentState = self[postState.nodeId]
+      currentState.text = postState.text
+      currentState.links = copy.copy(postState.links)
     self.done.append(transaction)
 
   def trimBlankNodesFromEnd(self):
@@ -212,8 +219,9 @@ class GraphView(urwid.Pile):
 
   def recordChanges(self):
     currentNode = copy.deepcopy(self.graph[self.selection])
-    currentNode.text = self.currentNode.edit_text
-    self.graph.stageNode(currentNode)
+    if currentNode.text != self.currentNode.edit_text:
+      currentNode.text = self.currentNode.edit_text
+      self.graph.stageNode(currentNode)
 
   @property
   def selection(self):
@@ -260,6 +268,7 @@ class GraphView(urwid.Pile):
       #TODO elif key in keybindings['search-nodes']:
       elif key in keybindings['jump-to-command-bar']:
         self.focus_item = self.commandBar
+        self.mode = 'insert-mode'
       elif key in keybindings['insert-mode']:
         self.mode = 'insert-mode'
         if self.focus_item != self.commandBar and self.focus_item != self.currentNodeWidget:
@@ -275,6 +284,8 @@ class GraphView(urwid.Pile):
       elif key in keybindings['command-mode.undo']:
         self.graph.undo()
         if self.selection >= len(self.graph):
+          self.selection = 0
+        if self.graph[self.selection].text is None:
           self.selection = 0
         self.update()
       elif key in keybindings['command-mode.redo']:
