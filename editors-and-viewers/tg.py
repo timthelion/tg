@@ -84,7 +84,7 @@ class TextGraph(list):
     didSomething = False
     for node in self.stagedNodes:
       if node.text is None:
-        self.deleted.append(node)
+        self.deleted.append(node.nodeId)
       elif node.nodeId in self.deleted:
         self.deleted.remove(node.nodeId)
       prevState = self[node.nodeId]
@@ -140,6 +140,21 @@ class TextGraph(list):
       if nodeId in node.links:
         backlinks.append(node.nodeId)
     return backlinks
+
+  def getDeleteNodeChanges(self,nodeId):
+    changes = []
+    for backlink in self.getBacklinks(nodeId):
+      if backlink != nodeId:
+        backlinkingNode = copy.deepcopy(self[backlink])
+        backlinkingNode.links = [value for value in backlinkingNode.links if value != nodeId]
+        changes.append(backlinkingNode)
+    changes.append(Node(nodeId,None,[]))
+    return changes
+
+  def deleteNode(self,nodeId):
+    for node in self.getDeleteNodeChanges(nodeId):
+      self.stageNode(node)
+    self.applyChanges()
 
   def getTree(self,nodeId):
     node = self[nodeId]
@@ -402,6 +417,13 @@ class NodeNavigator(NodeList):
           self.view.focus_item = self.view.currentNodeWidget
       else:
         self.newNode()
+    if key in keybindings["delete-node"]:
+      nodeId = self.nodes[self.focus_position].nodeId
+      if nodeId != 0:
+        self.view.graph.deleteNode(nodeId)
+        self.view.update()
+      else:
+        self.view.statusMessage = "Cannot delete node 0."
     if key in keybindings["add-to-stack"]:
       self.view.clipboard.nodes.append(self.nodes[self.focus_position])
       fcp = self.focus_position
@@ -572,7 +594,8 @@ keybindings = {
  'move-node-up' : ['ctrl up'],
  'move-node-down' : ['ctrl down'],
  'new-node' : ['n'],
- 'remove-link-or-backlink' : ['d','delete'],
+ 'remove-link-or-backlink' : ['d'],
+ 'delete-node' : ['delete'],
  'move-to-node-zero' : ['.'],
  'jump-to-command-bar' : [':'],
  'jump-to-node-edit-box' : ['esc'],
