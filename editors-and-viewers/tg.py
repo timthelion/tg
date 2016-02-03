@@ -255,8 +255,8 @@ class GraphView(urwid.Pile):
     self.statusBar.set_text("Node: "+str(currentNodeId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+ " | "+self.statusMessage)
 
   def recordChanges(self):
-    currentNode = copy.deepcopy(self.graph[self.selection])
-    if currentNode.text != self.currentNode.edit_text:
+    if self.graph[self.selection].text != self.currentNode.edit_text:
+      currentNode = copy.deepcopy(self.graph[self.selection])
       currentNode.text = self.currentNode.edit_text
       self.graph.stageNode(currentNode)
       self.graph.applyChanges()
@@ -278,11 +278,12 @@ class GraphView(urwid.Pile):
   def handleKeypress(self,size,key):
     if key in keybindings['jump-to-node-edit-box']:
       self.focus_item = self.currentNodeWidget
+    if key in ['left','right','up','down','home','end']:
+      self.recordChanges()
+      return super(GraphView,self).keypress(size,key)
     if key in keybindings['command-mode']:
       self.recordChanges()
       self.mode = 'command-mode'
-    if key in ['left','right','up','down','home','end']:
-      self.recordChanges()
     elif key in keybindings['move-down-one-mega-widget']:
       try:
         self.recordChanges()
@@ -461,7 +462,7 @@ class BackLinksList(NodeNavigator):
         self.view.graph.stageNode(node)
         self.view.graph.applyChanges()
         self.view.update()
-        self.focus_position = self.nodes.index(node)
+        self.focus_position = len(self.nodes) - 1
     elif key in keybindings['remove-link-or-backlink']:
       try:
         fcp = self.focus_position
