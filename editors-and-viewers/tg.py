@@ -222,6 +222,7 @@ class GraphView(urwid.Pile):
     if currentNode.text != self.currentNode.edit_text:
       currentNode.text = self.currentNode.edit_text
       self.graph.stageNode(currentNode)
+      self.graph.applyChanges()
 
   @property
   def selection(self):
@@ -242,21 +243,23 @@ class GraphView(urwid.Pile):
       self.focus_item = self.currentNodeWidget
     if key in keybindings['command-mode']:
       self.recordChanges()
-      self.graph.applyChanges()
       self.mode = 'command-mode'
+    if key in ['left','right','up','down','home','end']:
+      self.recordChanges()
     elif key in keybindings['move-down-one-mega-widget']:
       try:
+        self.recordChanges()
         self.focus_position = self.focus_position + 1
       except IndexError:
         pass
     elif key in keybindings['move-up-one-mega-widget']:
       try:
+        self.recordChanges()
         self.focus_position = self.focus_position - 1
       except IndexError:
         pass
     elif self.mode == 'command-mode' or (self.focus_item != self.currentNodeWidget  and self.focus_item != self.commandBar):
       self.recordChanges()
-      self.graph.applyChanges()
       if key in keybindings["back"]:
         if self.history:
           self._selection = self.history.pop()
@@ -513,7 +516,6 @@ class CommandBar(urwid.Filler):
     if "w" in com:
       try:
         self.view.recordChanges()
-        self.view.applyChanges()
         self.view.graph.save()
         self.view.graph.edited = False
       except FileNotFoundError as e:
@@ -523,6 +525,17 @@ class CommandBar(urwid.Filler):
         self.edit.set_caption("Not quiting. Save your work first, or use 'q!'\n:")
       else:
         raise urwid.ExitMainLoop()
+    try:
+      newSelection = int(com)
+      if newSelection >= 0 and newSelection < len(self.view.graph) and self.view.graph[newSelection].text is not None:
+        self.view.selection = newSelection
+        self.view.update()
+        self.view.focus_item = self.view.currentNodeWidget
+        self.view.mode = 'command-mode'
+      else:
+        self.edit.set_caption("Cannot jump to "+com+". Node does not exist.\n:")
+    except ValueError:
+      pass
     self.edit.edit_text = ""
 
 keybindings = {
