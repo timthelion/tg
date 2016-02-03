@@ -1,4 +1,26 @@
 #!/usr/bin/python3
+#
+# Authors: Timothy Hobbs
+# Copyright years: 2016
+#
+# Description:
+#
+# tg is a simple TUI Vim style modal editor for textual graphs.
+#
+########################################################################
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
 import json
@@ -572,7 +594,7 @@ pallet = [('backlink_selected', 'white', 'dark blue')
          ,('clipboard','white','dark gray')]
 
 if __name__ == "__main__":
-  parser = optparse.OptionParser(usage = "stgre FILE",description = "Edit simple text graph file(stgr file) using a simple,fast TUI interface.")
+  parser = optparse.OptionParser(usage = "stgre FILE",description = "Edit simple text graph file(tg file) using a simple,fast TUI interface.")
   options,args = parser.parse_args(sys.argv[1:])
 
   if not len(args) == 1:
