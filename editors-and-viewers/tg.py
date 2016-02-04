@@ -215,7 +215,8 @@ class GraphView(urwid.Frame):
     # main pile
     super(GraphView,self).__init__(urwid.Pile([self.backlinks,self.currentNodeWidget,self.links]),header=self.clipboardBoxAdapter,footer=urwid.BoxAdapter(urwid.ListBox(urwid.SimpleFocusListWalker([self.statusBar,self.commandBar])),height=3))
     self.update()
-    self.contents['body'][0].focus_item = self.currentNodeWidget
+    self.updateStatusBar()
+    self.focus_item = self.currentNodeWidget
 
   def update(self):
     # clipboard
@@ -253,7 +254,7 @@ class GraphView(urwid.Frame):
         currentNodeId = self.selection
     else:
       currentNodeId = self.selection
-    self.statusBar.set_text("Node: "+str(currentNodeId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+ " | "+self.statusMessage)
+    self.statusBar.set_text("Node: "+str(currentNodeId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" " +self.mode+ " | "+self.statusMessage)
 
   def recordChanges(self):
     if self.graph[self.selection].text != self.currentNode.edit_text:
@@ -296,7 +297,7 @@ class GraphView(urwid.Frame):
     return value
 
   def inEditArea(self):
-    return self.focus_item == self.clipboard or self.focus_item == self.currentNodeWidget
+    return self.focus_item == self.commandBar or self.focus_item == self.currentNodeWidget
 
   def handleKeypress(self,size,key):
     if key in keybindings['jump-to-node-edit-box']:
@@ -597,8 +598,10 @@ class CommandBar(urwid.Edit):
   def keypress(self,size,key):
     if key != 'enter':
       return super(CommandBar,self).keypress(size,key)
+    success = False
     com = self.edit.edit_text
     if "w" in com:
+      success = True
       try:
         self.view.recordChanges()
         self.view.graph.save()
@@ -606,6 +609,7 @@ class CommandBar(urwid.Edit):
       except FileNotFoundError as e:
         self.edit.set_caption("Unable to save:"+str(e)+"\n:")
     if "q" in com:
+      success = True
       if self.view.graph.edited and "!" not in com:
         self.edit.set_caption("Not quiting. Save your work first, or use 'q!'\n:")
       else:
@@ -617,11 +621,17 @@ class CommandBar(urwid.Edit):
         self.view.update()
         self.view.focus_item = self.view.currentNodeWidget
         self.view.mode = 'command-mode'
+        success = True
       else:
         self.edit.set_caption("Cannot jump to "+com+". Node does not exist.\n:")
     except ValueError:
       pass
     self.edit.edit_text = ""
+    if success:
+      self.view.focus_item = self.view.currentNodeWidget
+    else:
+      self.edit.set_caption(com + " is not a valid tg command.\n:")
+
 
 keybindings = {
  'back' : ['meta left','b'],
