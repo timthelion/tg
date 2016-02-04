@@ -291,13 +291,16 @@ class GraphView(urwid.Frame):
       self.focus_position = 'body'
       self.contents['body'][0].focus_item = value
 
-  def keypress(self,size,key):
-    value = self.handleKeypress(size,key)
-    self.updateStatusBar()
-    return value
-
   def inEditArea(self):
     return self.focus_item == self.commandBar or self.focus_item == self.currentNodeWidget
+
+  def keypress(self,size,key):
+    focusedBeforeProcessing = self.focus_item
+    value = self.handleKeypress(size,key)
+    if key in keybindings['command-mode.down'] and focusedBeforeProcessing == self.currentNodeWidget and self.focus_item == self.links:
+      self.links.focus_position = 0
+    self.updateStatusBar()
+    return value
 
   def handleKeypress(self,size,key):
     if key in keybindings['jump-to-node-edit-box']:
