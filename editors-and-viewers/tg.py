@@ -48,6 +48,13 @@ class Node():
   def __repr__(self):
     return str((self.nodeId,self.text,self.links))
 
+  @property
+  def title(self):
+    try:
+      return self.text.splitlines()[0]
+    except IndexError:
+      return "<blank-text>"
+
 class TextGraph(list):
   def __init__(self,fileName):
     self.fileName = fileName
@@ -212,8 +219,12 @@ class GraphView(urwid.Frame):
     self.statusBar = urwid.Text("")
     # command bar
     self.commandBar = CommandBar(self)
-    # main pile
-    super(GraphView,self).__init__(urwid.Pile([self.backlinks,self.currentNodeWidget,self.links]),header=self.clipboardBoxAdapter,footer=urwid.BoxAdapter(urwid.ListBox(urwid.SimpleFocusListWalker([self.statusBar,self.commandBar])),height=3))
+    # search box
+    self.searchBox = SearchBox(self)
+    # main frame
+    self.pile = urwid.Pile([self.backlinks,self.currentNodeWidget,self.links])
+    self.body = urwid.WidgetPlaceholder(self.pile)
+    super(GraphView,self).__init__(self.body,header=self.clipboardBoxAdapter,footer=urwid.BoxAdapter(urwid.ListBox(urwid.SimpleFocusListWalker([self.statusBar,self.commandBar])),height=3))
     self.update()
     self.updateStatusBar()
     self.focus_item = self.currentNodeWidget
@@ -242,12 +253,14 @@ class GraphView(urwid.Frame):
       edited = "Edited"
     else:
       edited = "Saved"
-    if self.contents['body'][0].focus_item == self.backlinks:
+    if self.mode == 'search-mode':
+      currentNodeId = self.searchBox.focused_node
+    elif self.focus_item == self.backlinks:
       try:
         currentNodeId = self.backlinks.nodes[self.backlinks.focus_position].nodeId
       except IndexError:
         currentNodeId = self.selection
-    elif self.contents['body'][0].focus_item == self.links:
+    elif self.focus_item == self.links:
       try:
         currentNodeId = self.links.nodes[self.links.focus_position].nodeId
       except IndexError:
@@ -277,7 +290,7 @@ class GraphView(urwid.Frame):
     if self.focus_position == 'header':
       return self.clipboard
     elif self.focus_position == 'body':
-      return self.contents['body'][0].focus_item
+      return self.contents['body'][0].original_widget.focus_item
     elif self.focus_position == 'footer':
       return self.commandBar
 
@@ -289,12 +302,14 @@ class GraphView(urwid.Frame):
       self.focus_position = 'footer'
     else:
       self.focus_position = 'body'
-      self.contents['body'][0].focus_item = value
+      self.contents['body'][0].original_widget.focus_item = value
 
   def inEditArea(self):
     return self.focus_item == self.commandBar or self.focus_item == self.currentNodeWidget
 
   def keypress(self,size,key):
+    if self.mode == 'search-mode':
+      return self.keypressSearchmode(size, key)
     focusedBeforeProcessing = self.focus_item
     value = self.handleKeypress(size,key)
     if key in keybindings['command-mode.down'] and focusedBeforeProcessing == self.currentNodeWidget and self.focus_item == self.links:
@@ -315,10 +330,10 @@ class GraphView(urwid.Frame):
       self.recordChanges()
       if self.focus_position == 'header':
         self.focus_position = 'body'
-        self.contents['body'][0].focus_position = 0
+        self.contents['body'][0].original_widget.focus_position = 0
       elif self.focus_position == 'body':
-        if self.contents['body'][0].focus_position < 2:
-          self.contents['body'][0].focus_position += 1
+        if self.contents['body'][0].original_widget.focus_position < 2:
+          self.contents['body'][0].original_widget.focus_position += 1
         else:
           self.focus_position = 'footer'
       elif self.focus_position == 'footer':
@@ -335,7 +350,7 @@ class GraphView(urwid.Frame):
           self.focus_position = 'header'
       elif self.focus_position == 'header':
         pass
-    elif self.mode == 'command-mode' or not self.inEditArea():
+    elif self.focus_item != self.commandBar and (self.mode == 'command-mode' or not self.inEditArea()):
       self.recordChanges()
       if key in keybindings["back"]:
         if self.history:
@@ -345,10 +360,13 @@ class GraphView(urwid.Frame):
         self.selection = 0
         self.update()
         self.focus_item = self.currentNodeWidget
-      #TODO elif key in keybindings['search-nodes']:
+      elif key in keybindings['search-mode']:
+        self.mode = 'search-mode'
+        self.body.original_widget = self.searchBox
+        self.updateStatusBar()
+        return None
       elif key in keybindings['jump-to-command-bar']:
         self.focus_item = self.commandBar
-        self.mode = 'insert-mode'
       elif key in keybindings['insert-mode']:
         self.mode = 'insert-mode'
         if not self.inEditArea():
@@ -378,6 +396,17 @@ class GraphView(urwid.Frame):
     else:
       return super(GraphView,self).keypress(size,key)
 
+  def keypressSearchmode(self,size,key):
+    if key == 'esc':
+      self.mode = 'command-mode'
+      self.body.original_widget = self.pile
+      self.updateStatusBar()
+      return None
+    elif self.focus_position == 'body':
+      value = self.body.keypress(size,key)
+      self.updateStatusBar()
+      return value
+
 class NodeList(urwid.ListBox):
   def __init__(self,selectionCollor,alignment):
     self.selectionCollor = selectionCollor
@@ -392,11 +421,7 @@ class NodeList(urwid.ListBox):
     if not self.nodes:
       items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(" ",0),align=self.alignment,width="pack"),None,self.selectionCollor))
     for node in self.nodes:
-      try:
-        title = node.text.splitlines()[0]
-      except IndexError:
-        title = "<blank-text>"
-      items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(title,0),align=self.alignment,width="pack"),None,self.selectionCollor))
+      items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(node.title,0),align=self.alignment,width="pack"),None,self.selectionCollor))
     self.body.clear()
     self.body.extend(items)
 
@@ -592,6 +617,24 @@ class LinksList(NodeNavigator):
     else:
       return super(LinksList,self).keypress(size,key)
 
+class SearchBox(urwid.ListBox):
+  def __init__(self,view):
+    self.view = view
+    super(SearchBox,self).__init__(urwid.SimpleFocusListWalker([]))
+    self.update()
+
+  def update(self):
+    items = []
+    for node in self.view.graph:
+      items.append(urwid.Padding(urwid.SelectableIcon(node.title,0),align='left',width="pack"))
+    self.body.clear()
+    self.body.extend(items)
+    self.focus_position = 0
+
+  @property
+  def focused_node(self):
+    return self.focus_position
+
 class CommandBar(urwid.Edit):
   def __init__(self,view):
     self.view = view
@@ -634,7 +677,6 @@ class CommandBar(urwid.Edit):
       self.view.focus_item = self.view.currentNodeWidget
     else:
       self.edit.set_caption(com + " is not a valid tg command.\n:")
-
 
 keybindings = {
  'back' : ['meta left','b'],
