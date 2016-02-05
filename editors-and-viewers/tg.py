@@ -254,7 +254,10 @@ class GraphView(urwid.Frame):
     else:
       edited = "Saved"
     if self.mode == 'search-mode':
-      currentNodeId = self.searchBox.focused_node
+      try:
+        currentNodeId = self.searchBox.focused_node
+      except IndexError:
+        currentNodeId = 0
     elif self.focus_item == self.backlinks:
       try:
         currentNodeId = self.backlinks.nodes[self.backlinks.focus_position].nodeId
@@ -318,7 +321,7 @@ class GraphView(urwid.Frame):
     return value
 
   def handleKeypress(self,size,key):
-    if key in keybindings['jump-to-node-edit-box']:
+    if key in keybindings['leave-and-go-to-mainer-part']:
       self.focus_item = self.currentNodeWidget
     if key in ['left','right','up','down','home','end']:
       self.recordChanges()
@@ -362,6 +365,8 @@ class GraphView(urwid.Frame):
         self.focus_item = self.currentNodeWidget
       elif key in keybindings['search-mode']:
         self.mode = 'search-mode'
+        self.searchBox.searchEdit.edit_text = ""
+        self.searchBox.update()
         self.body.original_widget = self.searchBox
         self.updateStatusBar()
         return None
@@ -398,14 +403,20 @@ class GraphView(urwid.Frame):
 
   def keypressSearchmode(self,size,key):
     if key == 'esc':
-      self.mode = 'command-mode'
-      self.body.original_widget = self.pile
-      self.updateStatusBar()
-      return None
+      if self.focus_position != 'body':
+        self.focus_position = 'body'
+        return None
+      else:
+        self.mode = 'command-mode'
+        self.body.original_widget = self.pile
+        self.updateStatusBar()
+        return None
     elif self.focus_position == 'body':
       value = self.body.keypress(size,key)
       self.updateStatusBar()
       return value
+    else:
+      super(GraphView,self).keypress(size,key)
 
 class NodeList(urwid.ListBox):
   def __init__(self,selectionCollor,alignment):
@@ -620,20 +631,63 @@ class LinksList(NodeNavigator):
 class SearchBox(urwid.ListBox):
   def __init__(self,view):
     self.view = view
+    self.nodes = self.view.graph
     super(SearchBox,self).__init__(urwid.SimpleFocusListWalker([]))
+    self.searchEdit = urwid.Edit()
+    self.body.append(self.searchEdit)
     self.update()
 
   def update(self):
+    self.nodes = []
     items = []
     for node in self.view.graph:
-      items.append(urwid.Padding(urwid.SelectableIcon(node.title,0),align='left',width="pack"))
-    self.body.clear()
+      if self.searchEdit.edit_text in node.text:
+        self.nodes.append(node)
+        items.append(urwid.Padding(urwid.SelectableIcon(node.title,0),align='left',width="pack"))
+    del self.body[1:]
     self.body.extend(items)
     self.focus_position = 0
 
   @property
   def focused_node(self):
-    return self.focus_position
+    if self.focus_position > 0:
+      return self.nodes[self.focus_position-1].nodeId
+    else:
+      raise IndexError("No focused node.")
+
+  def keypress(self,size,key):
+    if self.focus_position == 0:
+      if key == 'enter':
+        try:
+          self.focus_position = 1
+          return super(SearchBox,self).keypress(size,key)
+        except IndexError:
+          pass
+      else:
+        value = super(SearchBox,self).keypress(size,key)
+        self.update()
+        return value
+    if key in keybindings['command-mode.up']:
+      return super(SearchBox,self).keypress(size,'up')
+    elif key in keybindings['command-mode.down']:
+      return super(SearchBox,self).keypress(size,'down')
+    elif key in keybindings['jump-to-command-bar']:
+      self.view.focus_position = 'footer'
+    elif key == 'enter':
+      self.view.selection = self.focused_node
+      self.view.mode = 'command-mode'
+      self.view.body.original_widget = self.view.pile
+      self.view.update()
+    elif key in keybindings['insert-mode']:
+      self.view.selection = self.focused_node
+      self.view.mode = 'insert-mode'
+      self.view.body.original_widget = self.view.pile
+      self.view.update()
+    elif key in keybindings['add-to-stack']:
+      self.view.clipboard.nodes.append(self.view.graph[self.focused_node])
+      self.view.update()
+    else:
+      return super(SearchBox,self).keypress(size,key)
 
 class CommandBar(urwid.Edit):
   def __init__(self,view):
@@ -694,7 +748,7 @@ keybindings = {
  'delete-node' : ['delete'],
  'move-to-node-zero' : ['.'],
  'jump-to-command-bar' : [':'],
- 'jump-to-node-edit-box' : ['esc'],
+ 'leave-and-go-to-mainer-part' : ['esc'],
  'move-up-one-mega-widget' : ['meta up'],
  'move-down-one-mega-widget' : ['meta down'],
  'command-mode' : ['esc'],
