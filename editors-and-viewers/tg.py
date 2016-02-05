@@ -63,6 +63,7 @@ class TextGraph(list):
     self.stagedNodes = []
     self.undone = []
     self.done = []
+    self.header = ""
     try:
       with open(fileName) as fd:
         self.json = fd.read()
@@ -174,25 +175,29 @@ class TextGraph(list):
   @property
   def json(self):
     self.trimBlankNodesFromEnd()
-    # We format the output to privide better diff support.
-    serialized = "["
+    serialized = self.header
     for node in self:
       serialized += json.dumps([node.text,node.links])
-      serialized += "\n,"
-    serialized = serialized[:-2] + "]\n"
+      serialized += "\n"
     return serialized
 
   @json.setter
   def json(self,text):
-    try:
-      table = json.loads(text)
-    except ValueError as e:
-      print("Cannot load file "+fileName)
-      sys.exit(str(e))
+    self.header = ""
+    readingHeader = True
     nodeId = 0
-    for (text,links) in table:
-      self.append(Node(nodeId,text,links))
-      nodeId += 1
+    for line in text.splitlines():
+      if not line or line.startswith("#"):
+        if readingHeader:
+          self.header += line+"\n"
+      else:
+        readingHeader = False
+        try:
+          (text,links) = json.loads(line)
+          self.append(Node(nodeId,text,links))
+          nodeId += 1
+        except ValueError as e:
+          sys.exit("Cannot load file "+self.fileName+"\n"+str(e))
 
   def save(self):
     with open(self.fileName,"w") as fd:

@@ -1,4 +1,7 @@
-[["foo\nbar\nbaz", [2, 1]]
-,["bar", [0, 2]]
-,["baz", [0, 3]]
-,["blah", []]]
+# test header
+# line 2 of test header
+
+["foo\nbaro\nbaz", [2, 1]]
+["bar", [0, 2]]
+["baz", [0, 3]]
+["blah", []]
