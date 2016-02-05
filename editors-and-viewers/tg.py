@@ -26,6 +26,7 @@ import sys
 import json
 import optparse
 import copy
+import subprocess
 try:
   import urwid
 except ImportError:
@@ -198,6 +199,23 @@ class TextGraph(list):
           nodeId += 1
         except ValueError as e:
           sys.exit("Cannot load file "+self.fileName+"\n"+str(e))
+
+  @property
+  def dot(self):
+    dot = "digraph graphname{\n"
+    labels = ""
+    edges = ""
+    for node in self:
+      labels += str(node.nodeId)+"[label="+json.dumps(node.text)+"]\n"
+      for link in node.links:
+        edges += str(node.nodeId)+" -> "+str(link)+"\n"
+    dot += labels
+    dot += edges
+    dot += "}"
+    return dot
+
+  def showDiagram(self):
+    subprocess.Popen(["dot","-T","xlib","/dev/stdin"],stdin=subprocess.PIPE).communicate(input=self.dot.encode("ascii"))
 
   def save(self):
     with open(self.fileName,"w") as fd:
@@ -381,6 +399,8 @@ class GraphView(urwid.Frame):
         self.mode = 'insert-mode'
         if not self.inEditArea():
           return super(GraphView,self).keypress(size,key)
+      elif key in keybindings['show-map']:
+        return self.graph.showDiagram()
       elif key in keybindings['command-mode.up']:
         return super(GraphView,self).keypress(size,'up')
       elif key in keybindings['command-mode.down']:
@@ -765,6 +785,7 @@ keybindings = {
  'command-mode.redo' : ['ctrl r'],
  'insert-mode' : ['i'],
  'search-mode' : ['/'],
+ 'show-map': ['m'],
  }
 pallet = [('backlink_selected', 'white', 'dark blue')
          ,('link_selected', 'white', 'dark red')
