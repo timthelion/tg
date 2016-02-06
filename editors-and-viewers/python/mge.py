@@ -386,10 +386,10 @@ class GraphView(urwid.Frame):
       self.recordChanges()
       if self.focus_position == 'footer':
         self.focus_position = 'body'
-        self.contents['body'][0].focus_position = 2
+        self.contents['body'][0].original_widget.focus_position = 2
       elif self.focus_position == 'body':
-        if self.contents['body'][0].focus_position > 0:
-          self.contents['body'][0].focus_position -= 1
+        if self.contents['body'][0].original_widget.focus_position > 0:
+          self.contents['body'][0].original_widget.focus_position -= 1
         else:
           self.focus_position = 'header'
       elif self.focus_position == 'header':
