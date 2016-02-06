@@ -541,7 +541,10 @@ class CurrentNode(urwid.Edit):
       else:
         return key
     else:
-      return super(CurrentNode,self).keypress(size,key)
+      value = super(CurrentNode,self).keypress(size,key)
+      self.cursorCords = self.get_cursor_coords(size)
+      return value
+
 
 class NodeNavigator(NodeList):
   def __init__(self,view,selectionCollor,alignment):
