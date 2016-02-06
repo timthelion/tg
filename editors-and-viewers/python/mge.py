@@ -224,7 +224,7 @@ class TextGraph(list):
     edges = ""
     for node in self:
       if node.text is not None:
-        labels += str(node.nodeId)+"[label="+json.dumps(node.text)+"]\n"
+        labels += str(node.nodeId)+"[label="+json.dumps(node.title)+"]\n"
         for link in node.links:
           edges += str(node.nodeId)+" -> "+str(link)+"\n"
     dot += labels
@@ -534,6 +534,20 @@ class CurrentNode(urwid.Edit):
       if key in keybindings['add-to-stack']:
         self.view.clipboard.nodes.append(self.view.graph[self.view.selection])
         self.view.update()
+      elif key in keybindings['delete-node']:
+        if self.view.selection != 0:
+          self.view.graph.deleteNode(self.view.selection)
+          while True:
+            prevSelection = self.view.history.pop()
+            if prevSelection != self.view.selection:
+              self.view.selection = prevSelection
+              break
+        else:
+          self.view.statusMessage("Cannot delete node 0.")
+        self.view.update()
+      elif key in keybindings['delete-tree']:
+        self.view.graph.deleteTree(self.view.selection)
+        self.view.update()
       elif not self.valid_char(key):
         value = super(CurrentNode,self).keypress(size,key)
         self.cursorCords = self.get_cursor_coords(size)
@@ -544,7 +558,6 @@ class CurrentNode(urwid.Edit):
       value = super(CurrentNode,self).keypress(size,key)
       self.cursorCords = self.get_cursor_coords(size)
       return value
-
 
 class NodeNavigator(NodeList):
   def __init__(self,view,selectionCollor,alignment):
