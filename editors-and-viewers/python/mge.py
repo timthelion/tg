@@ -140,6 +140,7 @@ class TextGraph(list):
     if not node.text is None:
       self.append(node)
     else:
+      self.deleted.remove(node.nodeId)
       # I am not sure if the return makes for tail recursion, but I hope so.
       return self.trimBlankNodesFromEnd()
 
