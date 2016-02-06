@@ -206,9 +206,10 @@ class TextGraph(list):
     labels = ""
     edges = ""
     for node in self:
-      labels += str(node.nodeId)+"[label="+json.dumps(node.text)+"]\n"
-      for link in node.links:
-        edges += str(node.nodeId)+" -> "+str(link)+"\n"
+      if node.text is not None:
+        labels += str(node.nodeId)+"[label="+json.dumps(node.text)+"]\n"
+        for link in node.links:
+          edges += str(node.nodeId)+" -> "+str(link)+"\n"
     dot += labels
     dot += edges
     dot += "}"
