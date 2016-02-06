@@ -678,7 +678,7 @@ class LinksList(NodeNavigator):
     if key in keybindings['move-node-up']:
       sel = copy.deepcopy(self.view.graph[self.view.selection])
       fcp = self.focus_position
-      if fcp >= 0:
+      if fcp >= 1:
         link = sel.links[fcp]
         prevLink = sel.links[fcp - 1]
         sel.links[fcp] = prevLink
