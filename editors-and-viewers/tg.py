@@ -667,9 +667,10 @@ class SearchBox(urwid.ListBox):
     self.nodes = []
     items = []
     for node in self.view.graph:
-      if self.searchEdit.edit_text in node.text:
-        self.nodes.append(node)
-        items.append(urwid.Padding(urwid.SelectableIcon(node.title,0),align='left',width="pack"))
+      if node.text is not None:
+        if self.searchEdit.edit_text in node.text:
+          self.nodes.append(node)
+          items.append(urwid.Padding(urwid.SelectableIcon(node.title,0),align='left',width="pack"))
     del self.body[1:]
     self.body.extend(items)
     self.focus_position = 0
