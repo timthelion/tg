@@ -160,9 +160,12 @@ class TextGraph(list):
     changes.append(Node(nodeId,None,[]))
     return changes
 
-  def deleteNode(self,nodeId):
+  def stageNodeForDeletion(self,nodeId):
     for node in self.getDeleteNodeChanges(nodeId):
       self.stageNode(node)
+
+  def deleteNode(self,nodeId):
+    self.stageNodeForDeletion(nodeId)
     self.applyChanges()
 
   def getTree(self,nodeId):
@@ -172,6 +175,20 @@ class TextGraph(list):
       if not link in tree:
         tree.update(self.getTree(link))
     return tree
+
+  def deleteTree(self,nodeId):
+    nodesForDeletion = set(self.getTree(nodeId))
+    for node in self:
+      if not node.nodeId in nodesForDeletion:
+        newLinks = []
+        for link in node.links:
+          if not link in nodesForDeletion:
+            newLinks.append(link)
+        if newLinks != node.links:
+          self.stageNode(Node(node.nodeId,node.text,newLinks))
+    for node in nodesForDeletion:
+      self.stageNode(Node(node,None,[]))
+    self.applyChanges()
 
   @property
   def json(self):
@@ -529,6 +546,14 @@ class NodeNavigator(NodeList):
           self.view.update()
         else:
           self.view.statusMessage = "Cannot delete node 0."
+    if key in keybindings["delete-tree"]:
+      if self.nodes:
+        nodeId = self.nodes[self.focus_position].nodeId
+        if nodeId != 0:
+          self.view.graph.deleteTree(nodeId)
+          self.view.update()
+        else:
+          self.view.statusMessage = "Cannot delete node 0."
     if key in keybindings["add-to-stack"]:
       if self.nodes:
         self.view.clipboard.nodes.append(self.nodes[self.focus_position])
@@ -773,6 +798,7 @@ keybindings = {
  'new-node' : ['n'],
  'remove-link-or-backlink' : ['d'],
  'delete-node' : ['delete'],
+ 'delete-tree' : ['ctrl delete'],
  'move-to-node-zero' : ['.'],
  'jump-to-command-bar' : [':'],
  'leave-and-go-to-mainer-part' : ['esc'],
