@@ -5,7 +5,7 @@
 #
 # Description:
 #
-# tg is a simple TUI Vim style modal editor for textual graphs.
+# mge is a simple TUI Vim style modal editor for textual graphs.
 #
 ########################################################################
 #
@@ -251,7 +251,7 @@ class GraphView(urwid.Frame):
     # backlinks
     self.backlinks = BackLinksList(self)
     # current node
-    self.currentNode = urwid.Edit(edit_text="",align="center",multiline=True)
+    self.currentNode = CurrentNode(self)
     self.currentNodeWidget = urwid.Filler(urwid.AttrMap(self.currentNode,None,"selection"))
     # links
     self.links = LinksList(self)
@@ -437,8 +437,6 @@ class GraphView(urwid.Frame):
       elif key in keybindings['command-mode.redo']:
         self.graph.redo()
         self.update()
-      elif self.inEditArea():
-        return
       else:
         return super(GraphView,self).keypress(size,key)
     else:
@@ -520,6 +518,30 @@ class Clipboard(NodeList):
         self.view.update()
     else:
       return super(Clipboard,self).keypress(size,key)
+
+class CurrentNode(urwid.Edit):
+  def __init__(self,view):
+    self.view = view
+    super(CurrentNode,self).__init__(edit_text="",align="center",multiline=True)
+    self.cursorCords = (0,0)
+
+  def render(self,size,focus=None):
+    self.move_cursor_to_coords(size,self.cursorCords[0],self.cursorCords[1])
+    return super(CurrentNode,self).render(size,True)
+
+  def keypress(self,size,key):
+    if self.view.mode =='command-mode':
+      if key in keybindings['add-to-stack']:
+        self.view.clipboard.nodes.append(self.view.graph[self.view.selection])
+        self.view.update()
+      elif not self.valid_char(key):
+        value = super(CurrentNode,self).keypress(size,key)
+        self.cursorCords = self.get_cursor_coords(size)
+        return value
+      else:
+        return key
+    else:
+      return super(CurrentNode,self).keypress(size,key)
 
 class NodeNavigator(NodeList):
   def __init__(self,view,selectionCollor,alignment):
@@ -782,7 +804,7 @@ class CommandBar(urwid.Edit):
     if success:
       self.view.focus_item = self.view.currentNodeWidget
     else:
-      self.edit.set_caption(com + " is not a valid tg command.\n:")
+      self.edit.set_caption(com + " is not a valid mge command.\n:")
 
 keybindings = {
  'back' : ['meta left','b'],
@@ -821,11 +843,11 @@ pallet = [('backlink_selected', 'white', 'dark blue')
          ,('clipboard','white','dark gray')]
 
 if __name__ == "__main__":
-  parser = optparse.OptionParser(usage = "stgre FILE",description = "Edit simple text graph file(tg file) using a simple,fast TUI interface.")
+  parser = optparse.OptionParser(usage = "tg FILE",description = "Edit simple text graph file(tg file) using a simple,fast TUI interface.")
   options,args = parser.parse_args(sys.argv[1:])
 
   if not len(args) == 1:
-    sys.exit("tg expects to be passed a single file path for editing. Use --help for help.")
+    sys.exit("mge expects to be passed a single file path for editing. Use --help for help.")
 
   graphView = GraphView(TextGraph(args[0]))
   urwid.MainLoop(graphView,pallet).run()
