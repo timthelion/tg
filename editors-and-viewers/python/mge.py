@@ -150,6 +150,16 @@ class TextGraph(list):
         backlinks.append(node.nodeId)
     return backlinks
 
+  def newNodeLinkedFromNode(self,linkedNodeId):
+    newNodeId = self.allocNode()
+    newNode = Node(newNodeId,"",[])
+    selectedNode = copy.deepcopy(self[linkedNodeId])
+    selectedNode.links.append(newNodeId)
+    self.stageNode(newNode)
+    self.stageNode(selectedNode)
+    self.applyChanges()
+    return newNodeId
+
   def getDeleteNodeChanges(self,nodeId):
     changes = []
     for backlink in self.getBacklinks(nodeId):
@@ -530,6 +540,13 @@ class CurrentNode(urwid.Edit):
     return super(CurrentNode,self).render(size,True)
 
   def keypress(self,size,key):
+    if key in keybindings['new-node-linked-to-previous-node']:
+      prevNode = self.view.history[-1]
+      self.view.recordChanges()
+      newNodeId = self.view.graph.newNodeLinkedFromNode(prevNode)
+      self.view.selection = newNodeId
+      self.view.history.append(prevNode)
+      self.view.update()
     if self.view.mode =='command-mode':
       if key in keybindings['add-to-stack']:
         self.view.clipboard.nodes.append(self.view.graph[self.view.selection])
@@ -652,14 +669,8 @@ class LinksList(NodeNavigator):
 
   def newNode(self):
     self.view.recordChanges()
-    newNodeId = self.view.graph.allocNode()
-    newNode = Node(newNodeId,"",[])
-    selectedNode = copy.deepcopy(self.view.graph[self.view.selection])
-    selectedNode.links.append(newNodeId)
+    newNodeId = self.view.graph.newNodeLinkedFromNode(self.view.selection)
     self.view.selection = newNodeId
-    self.view.graph.stageNode(newNode)
-    self.view.graph.stageNode(selectedNode)
-    self.view.graph.applyChanges()
     self.view.update()
     self.view.focus_item = self.view.currentNodeWidget
 
@@ -823,17 +834,14 @@ class CommandBar(urwid.Edit):
       self.edit.set_caption(com + " is not a valid mge command.\n:")
 
 keybindings = {
+ # global/command-mode
  'back' : ['meta left','b'],
- 'remove-from-stack' : ['d','delete'],
- 'link-to-stack-item-no-pop' : ['ctrl right'],
- 'link-to-stack-item' : ['right'],
- 'backlink-to-stack-item-no-pop' : ['ctrl left'],
- 'backlink-to-stack-item' : ['left'],
  'link-or-back-link-last-stack-item' : ['p'],
  'add-to-stack' : ['c'],
  'move-node-up' : ['ctrl up'],
  'move-node-down' : ['ctrl down'],
  'new-node' : ['n'],
+ 'new-node-linked-to-previous-node' : ['meta enter'],
  'remove-link-or-backlink' : ['d'],
  'delete-node' : ['delete'],
  'delete-tree' : ['ctrl delete'],
@@ -852,6 +860,12 @@ keybindings = {
  'insert-mode' : ['i'],
  'search-mode' : ['/'],
  'show-map': ['m'],
+ # stack area
+ 'remove-from-stack' : ['d'],
+ 'link-to-stack-item-no-pop' : ['ctrl right'],
+ 'link-to-stack-item' : ['right'],
+ 'backlink-to-stack-item-no-pop' : ['ctrl left'],
+ 'backlink-to-stack-item' : ['left'],
  }
 pallet = [('backlink_selected', 'white', 'dark blue')
          ,('link_selected', 'white', 'dark red')
