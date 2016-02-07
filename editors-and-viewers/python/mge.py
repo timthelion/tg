@@ -252,7 +252,8 @@ class TextGraph(list):
 
 class GraphView(urwid.Frame):
   def __init__(self,graph):
-    self.mode = 'command-mode'
+    self.__mode = 'mge'
+    self.clipboard = ""
     self.graph = graph
     self._selection = 0
     self.history = []
@@ -305,7 +306,7 @@ class GraphView(urwid.Frame):
       edited = "Edited"
     else:
       edited = "Saved"
-    if self.mode == 'search-mode':
+    if self.mode == 'search':
       try:
         currentNodeId = self.searchBox.focused_node
       except IndexError:
@@ -322,7 +323,7 @@ class GraphView(urwid.Frame):
         currentNodeId = self.selection
     else:
       currentNodeId = self.selection
-    self.statusBar.set_text("Node: "+str(currentNodeId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" " +self.mode+ " | "+self.statusMessage)
+    self.statusBar.set_text("Node: "+str(currentNodeId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" Mode: "+self.mode+" "+self.currentNode.mode+" | "+self.statusMessage)
 
   def recordChanges(self):
     if self.graph[self.selection].text != self.currentNode.edit_text:
@@ -359,11 +360,24 @@ class GraphView(urwid.Frame):
       self.focus_position = 'body'
       self.contents['body'][0].original_widget.focus_item = value
 
+  @property
+  def mode(self):
+    return self.__mode
+  @mode.setter
+  def mode(self,value):
+    if value == 'mge':
+      self.body.original_widget = self.pile
+    elif value == 'search':
+      self.body.original_widget = self.searchBox
+    else:
+      raise ValueError("Invalid mode"+value)
+    self.__mode = value
+
   def inEditArea(self):
     return self.focus_item == self.commandBar or self.focus_item == self.currentNodeWidget
 
   def keypress(self,size,key):
-    if self.mode == 'search-mode':
+    if self.mode == 'search':
       return self.keypressSearchmode(size, key)
     focusedBeforeProcessing = self.focus_item
     value = self.handleKeypress(size,key)
@@ -380,7 +394,7 @@ class GraphView(urwid.Frame):
       return super(GraphView,self).keypress(size,key)
     if key in keybindings['command-mode']:
       self.recordChanges()
-      self.mode = 'command-mode'
+      self.currentNode.mode = 'command'
     elif key in keybindings['move-down-one-mega-widget']:
       self.recordChanges()
       if self.focus_position == 'header':
@@ -405,7 +419,7 @@ class GraphView(urwid.Frame):
           self.focus_position = 'header'
       elif self.focus_position == 'header':
         pass
-    elif self.focus_item != self.commandBar and (self.mode == 'command-mode' or not self.inEditArea()):
+    elif not self.inEditArea() or (self.focus_item == self.currentNodeWidget and self.currentNode.mode == 'command'):
       self.recordChanges()
       if key in keybindings["back"]:
         if self.history:
@@ -416,16 +430,15 @@ class GraphView(urwid.Frame):
         self.update()
         self.focus_item = self.currentNodeWidget
       elif key in keybindings['search-mode']:
-        self.mode = 'search-mode'
+        self.mode = 'search'
         self.searchBox.searchEdit.edit_text = ""
         self.searchBox.update()
-        self.body.original_widget = self.searchBox
         self.updateStatusBar()
         return None
       elif key in keybindings['jump-to-command-bar']:
         self.focus_item = self.commandBar
       elif key in keybindings['insert-mode']:
-        self.mode = 'insert-mode'
+        self.currentNode.mode = 'insert'
         if not self.inEditArea():
           return super(GraphView,self).keypress(size,key)
       elif key in keybindings['show-map']:
@@ -459,7 +472,8 @@ class GraphView(urwid.Frame):
         self.focus_position = 'body'
         return None
       else:
-        self.mode = 'command-mode'
+        self.currentNode.mode = 'command'
+        self.mode = 'mge'
         self.body.original_widget = self.pile
         self.updateStatusBar()
         return None
@@ -511,8 +525,8 @@ class Clipboard(NodeList):
           del self.nodes[fcp]
         currentNode = copy.deepcopy(self.view.graph[self.view.selection])
         currentNode.links.append(node.nodeId)
-        self.graph.stageNode(currentNode)
-        self.graph.applyChanges()
+        self.view.graph.stageNode(currentNode)
+        self.view.graph.applyChanges()
         self.view.update()
     if key in keybindings['backlink-to-stack-item'] or key in keybindings['backlink-to-stack-item-no-pop']:
       try:
@@ -532,6 +546,8 @@ class Clipboard(NodeList):
 
 class CurrentNode(urwid.Edit):
   def __init__(self,view):
+    self.mode = 'command'
+    self.selection = (0,0)
     self.view = view
     super(CurrentNode,self).__init__(edit_text="",align="center",multiline=True)
     self.cursorCords = (0,0)
@@ -548,7 +564,7 @@ class CurrentNode(urwid.Edit):
       self.view.selection = newNodeId
       self.view.history.append(prevNode)
       self.view.update()
-    if self.view.mode =='command-mode':
+    if self.mode =='command':
       if key in keybindings['add-to-stack']:
         self.view.clipboard.nodes.append(self.view.graph[self.view.selection])
         self.view.update()
@@ -633,7 +649,7 @@ class BackLinksList(NodeNavigator):
     self.view.graph.applyChanges()
     self.view.update()
     self.view.focus_item = self.view.currentNodeWidget
-    self.view.mode = 'insert-mode'
+    self.view.currentNode.mode = 'insert-mode'
 
   def keypress(self,size,key):
     if key in ['right']:
@@ -777,13 +793,13 @@ class SearchBox(urwid.ListBox):
       self.view.focus_position = 'footer'
     elif key == 'enter':
       self.view.selection = self.focused_node
-      self.view.mode = 'command-mode'
-      self.view.body.original_widget = self.view.pile
+      self.view.currentNode.mode = 'command'
+      self.view.mode = 'mge'
       self.view.update()
     elif key in keybindings['insert-mode']:
       self.view.selection = self.focused_node
-      self.view.mode = 'insert-mode'
-      self.view.body.original_widget = self.view.pile
+      self.view.currentNode.mode = 'insert'
+      self.view.mode = 'mge'
       self.view.update()
     elif key in keybindings['add-to-stack']:
       self.view.clipboard.nodes.append(self.view.graph[self.focused_node])
@@ -822,7 +838,7 @@ class CommandBar(urwid.Edit):
         self.view.selection = newSelection
         self.view.update()
         self.view.focus_item = self.view.currentNodeWidget
-        self.view.mode = 'command-mode'
+        self.view.currentNode.mode = 'command'
         success = True
       else:
         self.edit.set_caption("Cannot jump to "+com+". Node does not exist.\n:")
