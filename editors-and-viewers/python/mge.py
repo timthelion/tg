@@ -106,6 +106,8 @@ class TextGraph(list):
       self.undone = []
       self.stagedNodes = []
       self.done.append(didNow)
+      if len(self.done)%5 == 0:
+        self.saveDraft()
       self.edited = True
 
   def undo(self):
@@ -249,6 +251,14 @@ class TextGraph(list):
   def save(self):
     with open(self.fileName,"w") as fd:
       fd.write(self.json)
+
+  def saveDraft(self):
+    with open("."+self.fileName+".draft","w") as fd:
+      fd.write(self.json)
+
+  def saveDot(self):
+    with open(self.fileName+".dot","w") as fd:
+      fd.write(self.dot)
 
 class GraphView(urwid.Frame):
   def __init__(self,graph):
@@ -818,35 +828,39 @@ class CommandBar(urwid.Edit):
       return super(CommandBar,self).keypress(size,key)
     success = False
     com = self.edit.edit_text
-    if "w" in com:
+    if com == "savedot":
       success = True
-      try:
-        self.view.recordChanges()
-        self.view.graph.save()
-        self.view.graph.edited = False
-      except FileNotFoundError as e:
-        self.edit.set_caption("Unable to save:"+str(e)+"\n:")
-    if "q" in com:
-      success = True
-      if self.view.graph.edited and "!" not in com:
-        self.edit.set_caption("Not quiting. Save your work first, or use 'q!'\n:")
-      else:
-        raise urwid.ExitMainLoop()
-    try:
-      newSelection = int(com)
-      if newSelection >= 0 and newSelection < len(self.view.graph) and self.view.graph[newSelection].text is not None:
-        self.view.selection = newSelection
-        self.view.update()
-        self.view.focus_item = self.view.currentNodeWidget
-        self.view.currentNode.mode = 'command'
+      self.view.graph.saveDot()
+    else:
+      if "w" in com:
         success = True
-      else:
-        self.edit.set_caption("Cannot jump to "+com+". Node does not exist.\n:")
-    except ValueError:
-      pass
-    self.edit.edit_text = ""
+        try:
+          self.view.recordChanges()
+          self.view.graph.save()
+          self.view.graph.edited = False
+        except FileNotFoundError as e:
+          self.edit.set_caption("Unable to save:"+str(e)+"\n:")
+      if "q" in com:
+        success = True
+        if self.view.graph.edited and "!" not in com:
+          self.edit.set_caption("Not quiting. Save your work first, or use 'q!'\n:")
+        else:
+          raise urwid.ExitMainLoop()
+      try:
+        newSelection = int(com)
+        if newSelection >= 0 and newSelection < len(self.view.graph) and self.view.graph[newSelection].text is not None:
+          self.view.selection = newSelection
+          self.view.update()
+          self.view.focus_item = self.view.currentNodeWidget
+          self.view.currentNode.mode = 'command'
+          success = True
+        else:
+          self.edit.set_caption("Cannot jump to "+com+". Node does not exist.\n:")
+      except ValueError:
+        pass
     if success:
       self.view.focus_item = self.view.currentNodeWidget
+      self.edit.edit_text = ""
     else:
       self.edit.set_caption(com + " is not a valid mge command.\n:")
 
