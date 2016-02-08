@@ -559,7 +559,7 @@ class CurrentNode(urwid.Edit):
     self.mode = 'command'
     self.selection = (0,0)
     self.view = view
-    super(CurrentNode,self).__init__(edit_text="",align="center",multiline=True)
+    super(CurrentNode,self).__init__(edit_text="",align="left",multiline=True)
     self.cursorCords = (0,0)
 
   def render(self,size,focus=None):
@@ -587,7 +587,7 @@ class CurrentNode(urwid.Edit):
               self.view.selection = prevSelection
               break
         else:
-          self.view.statusMessage("Cannot delete node 0.")
+          self.view.statusMessage = "Cannot delete node 0."
         self.view.update()
       elif key in keybindings['delete-tree']:
         self.view.graph.deleteTree(self.view.selection)
