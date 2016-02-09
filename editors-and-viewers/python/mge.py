@@ -5,7 +5,7 @@
 #
 # Description:
 #
-# mge is a simple TUI Vim style modal editor for textual graphs.
+# mge is a simple TUI Vim style modal editor for text graphs.
 #
 ########################################################################
 #
@@ -40,14 +40,14 @@ def showErrorDialog(error):
   window.pack()
   root.mainloop()
 
-class Node():
-  def __init__(self,nodeId,text,links):
-    self.nodeId = nodeId
+class Square():
+  def __init__(self,squareId,text,streets):
+    self.squareId = squareId
     self.text = text
-    self.links = links
+    self.streets = streets
 
   def __repr__(self):
-    return str((self.nodeId,self.text,self.links))
+    return str((self.squareId,self.text,self.streets))
 
   @property
   def title(self):
@@ -61,7 +61,7 @@ class TextGraph(list):
     self.fileName = fileName
     self.edited = False
     self.deleted = []
-    self.stagedNodes = []
+    self.stagedSquares = []
     self.undone = []
     self.done = []
     self.header = ""
@@ -69,42 +69,42 @@ class TextGraph(list):
       with open(fileName) as fd:
         self.json = fd.read()
     except FileNotFoundError:
-      self.append(Node(0,"",[]))
-    for node in self:
-      if node.text is None:
-        self.deleted.append(node.nodeId)
+      self.append(Square(0,"",[]))
+    for square in self:
+      if square.text is None:
+        self.deleted.append(square.squareId)
 
-  def allocNode(self):
+  def allocSquare(self):
     """
-    Return the ID of a new or free node.
+    Return the ID of a new or free square.
     """
     if self.deleted:
       return self.deleted.pop()
     else:
-      nodeId = len(self)
-      self.append(Node(nodeId,None,[]))
-      return nodeId
+      squareId = len(self)
+      self.append(Square(squareId,None,[]))
+      return squareId
 
-  def stageNode(self,node):
-    self.stagedNodes.append(copy.deepcopy(node))
+  def stageSquare(self,square):
+    self.stagedSquares.append(copy.deepcopy(square))
 
   def applyChanges(self):
     didNow = []
     didSomething = False
-    for node in self.stagedNodes:
-      if node.text is None:
-        self.deleted.append(node.nodeId)
-      elif node.nodeId in self.deleted:
-        self.deleted.remove(node.nodeId)
-      prevState = self[node.nodeId]
-      didNow.append((copy.deepcopy(prevState),copy.deepcopy(node)))
-      if not (prevState.text == node.text and prevState.links == node.links):
+    for square in self.stagedSquares:
+      if square.text is None:
+        self.deleted.append(square.squareId)
+      elif square.squareId in self.deleted:
+        self.deleted.remove(square.squareId)
+      prevState = self[square.squareId]
+      didNow.append((copy.deepcopy(prevState),copy.deepcopy(square)))
+      if not (prevState.text == square.text and prevState.streets == square.streets):
         didSomething = True
-        prevState.text = node.text
-        prevState.links = copy.copy(node.links)
+        prevState.text = square.text
+        prevState.streets = copy.copy(square.streets)
     if didSomething:
       self.undone = []
-      self.stagedNodes = []
+      self.stagedSquares = []
       self.done.append(didNow)
       if len(self.done)%5 == 0:
         self.saveDraft()
@@ -117,9 +117,9 @@ class TextGraph(list):
       return
     self.edited = True
     for (prevState,postState) in transaction:
-      currentState = self[prevState.nodeId]
+      currentState = self[prevState.squareId]
       currentState.text = prevState.text
-      currentState.links = copy.copy(prevState.links)
+      currentState.streets = copy.copy(prevState.streets)
     self.undone.append(transaction)
 
   def redo(self):
@@ -129,86 +129,86 @@ class TextGraph(list):
       return
     self.edited = True
     for (prevState,postState) in transaction:
-      currentState = self[postState.nodeId]
+      currentState = self[postState.squareId]
       currentState.text = postState.text
-      currentState.links = copy.copy(postState.links)
+      currentState.streets = copy.copy(postState.streets)
     self.done.append(transaction)
 
-  def trimBlankNodesFromEnd(self):
+  def trimBlankSquaresFromEnd(self):
     try:
-      node = self.pop()
+      square = self.pop()
     except IndexError:
       pass
-    if not node.text is None:
-      self.append(node)
+    if not square.text is None:
+      self.append(square)
     else:
-      self.deleted.remove(node.nodeId)
+      self.deleted.remove(square.squareId)
       # I am not sure if the return makes for tail recursion, but I hope so.
-      return self.trimBlankNodesFromEnd()
+      return self.trimBlankSquaresFromEnd()
 
-  def getBacklinks(self,nodeId):
-    backlinks = []
-    for node in self:
-      if nodeId in node.links:
-        backlinks.append(node.nodeId)
-    return backlinks
+  def getIncommingStreets(self,squareId):
+    incommingStreets = []
+    for square in self:
+      if squareId in square.streets:
+        incommingStreets.append(square.squareId)
+    return incommingStreets
 
-  def newNodeLinkedFromNode(self,linkedNodeId):
-    newNodeId = self.allocNode()
-    newNode = Node(newNodeId,"",[])
-    selectedNode = copy.deepcopy(self[linkedNodeId])
-    selectedNode.links.append(newNodeId)
-    self.stageNode(newNode)
-    self.stageNode(selectedNode)
+  def newSquareStreetedFromSquare(self,streetedSquareId):
+    newSquareId = self.allocSquare()
+    newSquare = Square(newSquareId,"",[])
+    selectedSquare = copy.deepcopy(self[streetedSquareId])
+    selectedSquare.streets.append(newSquareId)
+    self.stageSquare(newSquare)
+    self.stageSquare(selectedSquare)
     self.applyChanges()
-    return newNodeId
+    return newSquareId
 
-  def getDeleteNodeChanges(self,nodeId):
+  def getDeleteSquareChanges(self,squareId):
     changes = []
-    for backlink in self.getBacklinks(nodeId):
-      if backlink != nodeId:
-        backlinkingNode = copy.deepcopy(self[backlink])
-        backlinkingNode.links = [value for value in backlinkingNode.links if value != nodeId]
-        changes.append(backlinkingNode)
-    changes.append(Node(nodeId,None,[]))
+    for incommingStreet in self.getIncommingStreets(squareId):
+      if incommingStreet != squareId:
+        incommingStreetingSquare = copy.deepcopy(self[incommingStreet])
+        incommingStreetingSquare.streets = [value for value in incommingStreetingSquare.streets if value != squareId]
+        changes.append(incommingStreetingSquare)
+    changes.append(Square(squareId,None,[]))
     return changes
 
-  def stageNodeForDeletion(self,nodeId):
-    for node in self.getDeleteNodeChanges(nodeId):
-      self.stageNode(node)
+  def stageSquareForDeletion(self,squareId):
+    for square in self.getDeleteSquareChanges(squareId):
+      self.stageSquare(square)
 
-  def deleteNode(self,nodeId):
-    self.stageNodeForDeletion(nodeId)
+  def deleteSquare(self,squareId):
+    self.stageSquareForDeletion(squareId)
     self.applyChanges()
 
-  def getTree(self,nodeId):
-    node = self[nodeId]
-    tree = set([node.nodeId])
-    for link in node.links:
-      if not link in tree:
-        tree.update(self.getTree(link))
+  def getTree(self,squareId):
+    square = self[squareId]
+    tree = set([square.squareId])
+    for street in square.streets:
+      if not street in tree:
+        tree.update(self.getTree(street))
     return tree
 
-  def deleteTree(self,nodeId):
-    nodesForDeletion = set(self.getTree(nodeId))
-    for node in self:
-      if not node.nodeId in nodesForDeletion:
-        newLinks = []
-        for link in node.links:
-          if not link in nodesForDeletion:
-            newLinks.append(link)
-        if newLinks != node.links:
-          self.stageNode(Node(node.nodeId,node.text,newLinks))
-    for node in nodesForDeletion:
-      self.stageNode(Node(node,None,[]))
+  def deleteTree(self,squareId):
+    squaresForDeletion = set(self.getTree(squareId))
+    for square in self:
+      if not square.squareId in squaresForDeletion:
+        newStreets = []
+        for street in square.streets:
+          if not street in squaresForDeletion:
+            newStreets.append(street)
+        if newStreets != square.streets:
+          self.stageSquare(Square(square.squareId,square.text,newStreets))
+    for square in squaresForDeletion:
+      self.stageSquare(Square(square,None,[]))
     self.applyChanges()
 
   @property
   def json(self):
-    self.trimBlankNodesFromEnd()
+    self.trimBlankSquaresFromEnd()
     serialized = self.header
-    for node in self:
-      serialized += json.dumps([node.text,node.links])
+    for square in self:
+      serialized += json.dumps([square.text,square.streets])
       serialized += "\n"
     return serialized
 
@@ -216,7 +216,7 @@ class TextGraph(list):
   def json(self,text):
     self.header = ""
     readingHeader = True
-    nodeId = 0
+    squareId = 0
     for line in text.splitlines():
       if not line or line.startswith("#"):
         if readingHeader:
@@ -224,9 +224,9 @@ class TextGraph(list):
       else:
         readingHeader = False
         try:
-          (text,links) = json.loads(line)
-          self.append(Node(nodeId,text,links))
-          nodeId += 1
+          (text,streets) = json.loads(line)
+          self.append(Square(squareId,text,streets))
+          squareId += 1
         except ValueError as e:
           sys.exit("Cannot load file "+self.fileName+"\n"+str(e))
 
@@ -235,11 +235,11 @@ class TextGraph(list):
     dot = "digraph graphname{\n"
     labels = ""
     edges = ""
-    for node in self:
-      if node.text is not None:
-        labels += str(node.nodeId)+"[label="+json.dumps(node.title)+"]\n"
-        for link in node.links:
-          edges += str(node.nodeId)+" -> "+str(link)+"\n"
+    for square in self:
+      if square.text is not None:
+        labels += str(square.squareId)+"[label="+json.dumps(square.title)+"]\n"
+        for street in square.streets:
+          edges += str(square.squareId)+" -> "+str(street)+"\n"
     dot += labels
     dot += edges
     dot += "}"
@@ -270,13 +270,13 @@ class GraphView(urwid.Frame):
     # clipboard
     self.clipboard = Clipboard(self)
     self.clipboardBoxAdapter = urwid.BoxAdapter(self.clipboard,3)
-    # backlinks
-    self.backlinks = BackLinksList(self)
-    # current node
-    self.currentNode = CurrentNode(self)
-    self.currentNodeWidget = urwid.Filler(urwid.AttrMap(self.currentNode,None,"selection"))
-    # links
-    self.links = LinksList(self)
+    # incommingStreets
+    self.incommingStreets = IncommingStreetsList(self)
+    # current square
+    self.currentSquare = CurrentSquare(self)
+    self.currentSquareWidget = urwid.Filler(urwid.AttrMap(self.currentSquare,None,"selection"))
+    # streets
+    self.streets = StreetsList(self)
     # status bar
     self.statusMessage = ""
     self.statusBar = urwid.Text("")
@@ -285,31 +285,31 @@ class GraphView(urwid.Frame):
     # search box
     self.searchBox = SearchBox(self)
     # main frame
-    self.pile = urwid.Pile([self.backlinks,self.currentNodeWidget,self.links])
+    self.pile = urwid.Pile([self.incommingStreets,self.currentSquareWidget,self.streets])
     self.body = urwid.WidgetPlaceholder(self.pile)
     super(GraphView,self).__init__(self.body,header=self.clipboardBoxAdapter,footer=urwid.BoxAdapter(urwid.ListBox(urwid.SimpleFocusListWalker([self.statusBar,self.commandBar])),height=3))
     self.update()
     self.updateStatusBar()
-    self.focus_item = self.currentNodeWidget
+    self.focus_item = self.currentSquareWidget
 
   def update(self):
     # clipboard
     self.clipboard.update()
-    # backlinks
-    backlinks = []
-    for backlink in self.graph.getBacklinks(self.selection):
-      backlinks.append(copy.deepcopy(self.graph[backlink]))
-    self.backlinks.update(backlinks)
-    # current node
-    self.currentNode.edit_text = self.graph[self.selection].text
-    # links
-    nodes = []
-    for nodeId in self.graph[self.selection].links:
+    # incommingStreets
+    incommingStreets = []
+    for incommingStreet in self.graph.getIncommingStreets(self.selection):
+      incommingStreets.append(copy.deepcopy(self.graph[incommingStreet]))
+    self.incommingStreets.update(incommingStreets)
+    # current square
+    self.currentSquare.edit_text = self.graph[self.selection].text
+    # streets
+    squares = []
+    for squareId in self.graph[self.selection].streets:
       try:
-        nodes.append(copy.deepcopy(self.graph[nodeId]))
+        squares.append(copy.deepcopy(self.graph[squareId]))
       except IndexError as e:
-        raise IndexError("nodeId:"+str(nodeId)+"\nselection:"+str(self.selection)+str(self.graph.json))
-    self.links.update(nodes)
+        raise IndexError("squareId:"+str(squareId)+"\nselection:"+str(self.selection)+str(self.graph.json))
+    self.streets.update(squares)
 
   def updateStatusBar(self):
     if self.graph.edited:
@@ -318,28 +318,28 @@ class GraphView(urwid.Frame):
       edited = "Saved"
     if self.mode == 'search':
       try:
-        currentNodeId = self.searchBox.focused_node
+        currentSquareId = self.searchBox.focused_square
       except IndexError:
-        currentNodeId = 0
-    elif self.focus_item == self.backlinks:
+        currentSquareId = 0
+    elif self.focus_item == self.incommingStreets:
       try:
-        currentNodeId = self.backlinks.nodes[self.backlinks.focus_position].nodeId
+        currentSquareId = self.incommingStreets.squares[self.incommingStreets.focus_position].squareId
       except IndexError:
-        currentNodeId = self.selection
-    elif self.focus_item == self.links:
+        currentSquareId = self.selection
+    elif self.focus_item == self.streets:
       try:
-        currentNodeId = self.links.nodes[self.links.focus_position].nodeId
+        currentSquareId = self.streets.squares[self.streets.focus_position].squareId
       except IndexError:
-        currentNodeId = self.selection
+        currentSquareId = self.selection
     else:
-      currentNodeId = self.selection
-    self.statusBar.set_text("Node: "+str(currentNodeId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" Mode: "+self.mode+" "+self.currentNode.mode+" | "+self.statusMessage)
+      currentSquareId = self.selection
+    self.statusBar.set_text("Square: "+str(currentSquareId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" Mode: "+self.mode+" "+self.currentSquare.mode+" | "+self.statusMessage)
 
   def recordChanges(self):
-    if self.graph[self.selection].text != self.currentNode.edit_text:
-      currentNode = copy.deepcopy(self.graph[self.selection])
-      currentNode.text = self.currentNode.edit_text
-      self.graph.stageNode(currentNode)
+    if self.graph[self.selection].text != self.currentSquare.edit_text:
+      currentSquare = copy.deepcopy(self.graph[self.selection])
+      currentSquare.text = self.currentSquare.edit_text
+      self.graph.stageSquare(currentSquare)
       self.graph.applyChanges()
 
   @property
@@ -384,27 +384,27 @@ class GraphView(urwid.Frame):
     self.__mode = value
 
   def inEditArea(self):
-    return self.focus_item == self.commandBar or self.focus_item == self.currentNodeWidget
+    return self.focus_item == self.commandBar or self.focus_item == self.currentSquareWidget
 
   def keypress(self,size,key):
     if self.mode == 'search':
       return self.keypressSearchmode(size, key)
     focusedBeforeProcessing = self.focus_item
     value = self.handleKeypress(size,key)
-    if key in keybindings['command-mode.down'] and focusedBeforeProcessing == self.currentNodeWidget and self.focus_item == self.links:
-      self.links.focus_position = 0
+    if key in keybindings['command-mode.down'] and focusedBeforeProcessing == self.currentSquareWidget and self.focus_item == self.streets:
+      self.streets.focus_position = 0
     self.updateStatusBar()
     return value
 
   def handleKeypress(self,size,key):
     if key in keybindings['leave-and-go-to-mainer-part']:
-      self.focus_item = self.currentNodeWidget
+      self.focus_item = self.currentSquareWidget
     if key in ['left','right','up','down','home','end']:
       self.recordChanges()
       return super(GraphView,self).keypress(size,key)
     if key in keybindings['command-mode']:
       self.recordChanges()
-      self.currentNode.mode = 'command'
+      self.currentSquare.mode = 'command'
     elif key in keybindings['move-down-one-mega-widget']:
       self.recordChanges()
       if self.focus_position == 'header':
@@ -429,16 +429,16 @@ class GraphView(urwid.Frame):
           self.focus_position = 'header'
       elif self.focus_position == 'header':
         pass
-    elif not self.inEditArea() or (self.focus_item == self.currentNodeWidget and self.currentNode.mode == 'command'):
+    elif not self.inEditArea() or (self.focus_item == self.currentSquareWidget and self.currentSquare.mode == 'command'):
       self.recordChanges()
       if key in keybindings["back"]:
         if self.history:
           self._selection = self.history.pop()
           self.update()
-      elif key in keybindings['move-to-node-zero']:
+      elif key in keybindings['move-to-square-zero']:
         self.selection = 0
         self.update()
-        self.focus_item = self.currentNodeWidget
+        self.focus_item = self.currentSquareWidget
       elif key in keybindings['search-mode']:
         self.mode = 'search'
         self.searchBox.searchEdit.edit_text = ""
@@ -448,7 +448,7 @@ class GraphView(urwid.Frame):
       elif key in keybindings['jump-to-command-bar']:
         self.focus_item = self.commandBar
       elif key in keybindings['insert-mode']:
-        self.currentNode.mode = 'insert'
+        self.currentSquare.mode = 'insert'
         if not self.inEditArea():
           return super(GraphView,self).keypress(size,key)
       elif key in keybindings['show-map']:
@@ -482,7 +482,7 @@ class GraphView(urwid.Frame):
         self.focus_position = 'body'
         return None
       else:
-        self.currentNode.mode = 'command'
+        self.currentSquare.mode = 'command'
         self.mode = 'mge'
         self.body.original_widget = self.pile
         self.updateStatusBar()
@@ -494,25 +494,25 @@ class GraphView(urwid.Frame):
     else:
       super(GraphView,self).keypress(size,key)
 
-class NodeList(urwid.ListBox):
+class SquareList(urwid.ListBox):
   def __init__(self,selectionCollor,alignment):
     self.selectionCollor = selectionCollor
     self.alignment = alignment
-    self.nodes = []
-    super(NodeList,self).__init__(urwid.SimpleFocusListWalker([]))
+    self.squares = []
+    super(SquareList,self).__init__(urwid.SimpleFocusListWalker([]))
 
-  def update(self,nodes=None):
-    if nodes is not None:
-      self.nodes = nodes
+  def update(self,squares=None):
+    if squares is not None:
+      self.squares = squares
     items = []
-    if not self.nodes:
+    if not self.squares:
       items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(" ",0),align=self.alignment,width="pack"),None,self.selectionCollor))
-    for node in self.nodes:
-      items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(node.title,0),align=self.alignment,width="pack"),None,self.selectionCollor))
+    for square in self.squares:
+      items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(square.title,0),align=self.alignment,width="pack"),None,self.selectionCollor))
     self.body.clear()
     self.body.extend(items)
 
-class Clipboard(NodeList):
+class Clipboard(SquareList):
   def __init__(self,view):
     self.view = view
     super(Clipboard,self).__init__("clipboard","right")
@@ -520,268 +520,268 @@ class Clipboard(NodeList):
   def keypress(self,size,key):
     if key in keybindings["remove-from-stack"]:
       fcp = self.focus_position
-      del self.nodes[fcp]
+      del self.squares[fcp]
       self.update()
-      if fcp < len(self.nodes):
+      if fcp < len(self.squares):
         self.focus_position = fcp
-    if key in keybindings['link-to-stack-item'] or key in keybindings['link-to-stack-item-no-pop']:
+    if key in keybindings['street-to-stack-item'] or key in keybindings['street-to-stack-item-no-pop']:
       try:
         fcp = self.focus_position
       except IndexError:
         pass
       else:
-        node = self.nodes[fcp]
-        if not key in keybindings['link-to-stack-item-no-pop']:
-          del self.nodes[fcp]
-        currentNode = copy.deepcopy(self.view.graph[self.view.selection])
-        currentNode.links.append(node.nodeId)
-        self.view.graph.stageNode(currentNode)
+        square = self.squares[fcp]
+        if not key in keybindings['street-to-stack-item-no-pop']:
+          del self.squares[fcp]
+        currentSquare = copy.deepcopy(self.view.graph[self.view.selection])
+        currentSquare.streets.append(square.squareId)
+        self.view.graph.stageSquare(currentSquare)
         self.view.graph.applyChanges()
         self.view.update()
-    if key in keybindings['backlink-to-stack-item'] or key in keybindings['backlink-to-stack-item-no-pop']:
+    if key in keybindings['incommingStreet-to-stack-item'] or key in keybindings['incommingStreet-to-stack-item-no-pop']:
       try:
         fcp = self.focus_position
       except IndexError:
         pass
       else:
-        node = self.nodes[fcp]
-        if not key in keybindings['backlink-to-stack-item-no-pop']:
-          del self.nodes[fcp]
-        node.links.append(self.view.selection)
-        self.view.graph.stageNode(node)
+        square = self.squares[fcp]
+        if not key in keybindings['incommingStreet-to-stack-item-no-pop']:
+          del self.squares[fcp]
+        square.streets.append(self.view.selection)
+        self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
         self.view.update()
     else:
       return super(Clipboard,self).keypress(size,key)
 
-class CurrentNode(urwid.Edit):
+class CurrentSquare(urwid.Edit):
   def __init__(self,view):
     self.mode = 'command'
     self.selection = (0,0)
     self.view = view
-    super(CurrentNode,self).__init__(edit_text="",align="left",multiline=True)
+    super(CurrentSquare,self).__init__(edit_text="",align="left",multiline=True)
     self.cursorCords = (0,0)
 
   def render(self,size,focus=None):
     self.move_cursor_to_coords(size,self.cursorCords[0],self.cursorCords[1])
-    return super(CurrentNode,self).render(size,True)
+    return super(CurrentSquare,self).render(size,True)
 
   def keypress(self,size,key):
-    if key in keybindings['new-node-linked-to-previous-node']:
-      prevNode = self.view.history[-1]
+    if key in keybindings['new-square-streeted-to-previous-square']:
+      prevSquare = self.view.history[-1]
       self.view.recordChanges()
-      newNodeId = self.view.graph.newNodeLinkedFromNode(prevNode)
-      self.view.selection = newNodeId
-      self.view.history.append(prevNode)
+      newSquareId = self.view.graph.newSquareStreetedFromSquare(prevSquare)
+      self.view.selection = newSquareId
+      self.view.history.append(prevSquare)
       self.view.update()
     if self.mode =='command':
       if key in keybindings['add-to-stack']:
-        self.view.clipboard.nodes.append(self.view.graph[self.view.selection])
+        self.view.clipboard.squares.append(self.view.graph[self.view.selection])
         self.view.update()
-      elif key in keybindings['delete-node']:
+      elif key in keybindings['delete-square']:
         if self.view.selection != 0:
-          self.view.graph.deleteNode(self.view.selection)
+          self.view.graph.deleteSquare(self.view.selection)
           while True:
             prevSelection = self.view.history.pop()
             if prevSelection != self.view.selection:
               self.view.selection = prevSelection
               break
         else:
-          self.view.statusMessage = "Cannot delete node 0."
+          self.view.statusMessage = "Cannot delete square 0."
         self.view.update()
       elif key in keybindings['delete-tree']:
         self.view.graph.deleteTree(self.view.selection)
         self.view.update()
       elif not self.valid_char(key):
-        value = super(CurrentNode,self).keypress(size,key)
+        value = super(CurrentSquare,self).keypress(size,key)
         self.cursorCords = self.get_cursor_coords(size)
         return value
       else:
         return key
     else:
-      value = super(CurrentNode,self).keypress(size,key)
+      value = super(CurrentSquare,self).keypress(size,key)
       self.cursorCords = self.get_cursor_coords(size)
       return value
 
-class NodeNavigator(NodeList):
+class SquareNavigator(SquareList):
   def __init__(self,view,selectionCollor,alignment):
     self.alignment = alignment
-    super(NodeNavigator,self).__init__(selectionCollor,alignment)
+    super(SquareNavigator,self).__init__(selectionCollor,alignment)
 
   def keypress(self,size,key):
-    if key in keybindings['new-node']:
-      self.newNode()
+    if key in keybindings['new-square']:
+      self.newSquare()
     if key in [self.alignment,'enter'] or key in keybindings['insert-mode']:
-      if self.nodes:
+      if self.squares:
         self.view.recordChanges()
-        self.view.selection = self.nodes[self.focus_position].nodeId
+        self.view.selection = self.squares[self.focus_position].squareId
         self.view.update()
         if not key == self.alignment:
-          self.view.focus_item = self.view.currentNodeWidget
+          self.view.focus_item = self.view.currentSquareWidget
       else:
-        self.newNode()
-    if key in keybindings["delete-node"]:
-      if self.nodes:
-        nodeId = self.nodes[self.focus_position].nodeId
-        if nodeId != 0:
-          self.view.graph.deleteNode(nodeId)
+        self.newSquare()
+    if key in keybindings["delete-square"]:
+      if self.squares:
+        squareId = self.squares[self.focus_position].squareId
+        if squareId != 0:
+          self.view.graph.deleteSquare(squareId)
           self.view.update()
         else:
-          self.view.statusMessage = "Cannot delete node 0."
+          self.view.statusMessage = "Cannot delete square 0."
     if key in keybindings["delete-tree"]:
-      if self.nodes:
-        nodeId = self.nodes[self.focus_position].nodeId
-        if nodeId != 0:
-          self.view.graph.deleteTree(nodeId)
+      if self.squares:
+        squareId = self.squares[self.focus_position].squareId
+        if squareId != 0:
+          self.view.graph.deleteTree(squareId)
           self.view.update()
         else:
-          self.view.statusMessage = "Cannot delete node 0."
+          self.view.statusMessage = "Cannot delete square 0."
     if key in keybindings["add-to-stack"]:
-      if self.nodes:
-        self.view.clipboard.nodes.append(self.nodes[self.focus_position])
+      if self.squares:
+        self.view.clipboard.squares.append(self.squares[self.focus_position])
         fcp = self.focus_position
         self.view.update()
         self.focus_position = fcp
     else:
-      return super(NodeNavigator,self).keypress(size,key)
+      return super(SquareNavigator,self).keypress(size,key)
 
-class BackLinksList(NodeNavigator):
+class IncommingStreetsList(SquareNavigator):
   def __init__(self,view):
     self.view = view
-    super(BackLinksList,self).__init__(view,'backlink_selected','left')
+    super(IncommingStreetsList,self).__init__(view,'incommingStreet_selected','left')
 
-  def newNode(self):
+  def newSquare(self):
     self.view.recordChanges()
-    nodeId = self.view.graph.allocNode()
-    node = Node(nodeId,"",[self.view.selection])
-    self.view.selection = node.nodeId
-    self.view.graph.stageNode(node)
+    squareId = self.view.graph.allocSquare()
+    square = Square(squareId,"",[self.view.selection])
+    self.view.selection = square.squareId
+    self.view.graph.stageSquare(square)
     self.view.graph.applyChanges()
     self.view.update()
-    self.view.focus_item = self.view.currentNodeWidget
-    self.view.currentNode.mode = 'insert-mode'
+    self.view.focus_item = self.view.currentSquareWidget
+    self.view.currentSquare.mode = 'insert-mode'
 
   def keypress(self,size,key):
     if key in ['right']:
-      self.view.focus_item = self.view.links
+      self.view.focus_item = self.view.streets
       try:
-        self.view.links.focus_position = 0
+        self.view.streets.focus_position = 0
       except IndexError:
         pass
-    if key in keybindings['link-or-back-link-last-stack-item']:
-      if self.view.clipboard.nodes:
-        node = self.view.clipboard.nodes.pop()
-        node.links.append(self.view.selection)
-        self.view.graph.stageNode(node)
+    if key in keybindings['street-or-back-street-last-stack-item']:
+      if self.view.clipboard.squares:
+        square = self.view.clipboard.squares.pop()
+        square.streets.append(self.view.selection)
+        self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
         self.view.update()
-        self.focus_position = len(self.nodes) - 1
-    elif key in keybindings['remove-link-or-backlink']:
+        self.focus_position = len(self.squares) - 1
+    elif key in keybindings['remove-street-or-incommingStreet']:
       try:
         fcp = self.focus_position
-        node = self.nodes[fcp]
-        node.links.remove(self.view.selection)
-        self.view.graph.stageNode(node)
+        square = self.squares[fcp]
+        square.streets.remove(self.view.selection)
+        self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
         self.view.update()
       except IndexError:
         pass
     else:
-      return super(BackLinksList,self).keypress(size,key)
+      return super(IncommingStreetsList,self).keypress(size,key)
 
-class LinksList(NodeNavigator):
+class StreetsList(SquareNavigator):
   def __init__(self,view):
     self.view = view
-    super(LinksList,self).__init__(view,'link_selected','right')
+    super(StreetsList,self).__init__(view,'street_selected','right')
 
-  def newNode(self):
+  def newSquare(self):
     self.view.recordChanges()
-    newNodeId = self.view.graph.newNodeLinkedFromNode(self.view.selection)
-    self.view.selection = newNodeId
+    newSquareId = self.view.graph.newSquareStreetedFromSquare(self.view.selection)
+    self.view.selection = newSquareId
     self.view.update()
-    self.view.focus_item = self.view.currentNodeWidget
+    self.view.focus_item = self.view.currentSquareWidget
 
   def keypress(self,size,key):
-    if key in keybindings['move-node-up']:
+    if key in keybindings['move-square-up']:
       sel = copy.deepcopy(self.view.graph[self.view.selection])
       fcp = self.focus_position
       if fcp >= 1:
-        link = sel.links[fcp]
-        prevLink = sel.links[fcp - 1]
-        sel.links[fcp] = prevLink
-        sel.links[fcp - 1] = link
-        self.view.graph.stageNode(sel)
+        street = sel.streets[fcp]
+        prevStreet = sel.streets[fcp - 1]
+        sel.streets[fcp] = prevStreet
+        sel.streets[fcp - 1] = street
+        self.view.graph.stageSquare(sel)
         self.view.graph.applyChanges()
         self.view.update()
         self.focus_position = fcp - 1
-    elif key in keybindings['move-node-down']:
+    elif key in keybindings['move-square-down']:
       sel = copy.deepcopy(self.view.graph[self.view.selection])
       fcp = self.focus_position
-      if fcp < len(sel.links):
-        link = sel.links[fcp]
-        nextLink = sel.links[fcp + 1]
-        sel.links[fcp] = nextLink
-        sel.links[fcp + 1] = link
-        self.view.graph.stageNode(sel)
+      if fcp < len(sel.streets):
+        street = sel.streets[fcp]
+        nextStreet = sel.streets[fcp + 1]
+        sel.streets[fcp] = nextStreet
+        sel.streets[fcp + 1] = street
+        self.view.graph.stageSquare(sel)
         self.view.graph.applyChanges()
         self.view.update()
         self.focus_position = fcp + 1
     elif key in ['left']:
-      self.view.focus_item = self.view.backlinks
-    elif key in keybindings['link-or-back-link-last-stack-item']:
-      if self.view.clipboard.nodes:
-        if self.nodes:
+      self.view.focus_item = self.view.incommingStreets
+    elif key in keybindings['street-or-back-street-last-stack-item']:
+      if self.view.clipboard.squares:
+        if self.squares:
           fcp = self.focus_position
         else:
           fcp = -1
-        node = self.view.clipboard.nodes.pop()
+        square = self.view.clipboard.squares.pop()
         sel = copy.deepcopy(self.view.graph[self.view.selection])
-        sel.links.insert(fcp + 1,node.nodeId)
-        self.view.graph.stageNode(sel)
+        sel.streets.insert(fcp + 1,square.squareId)
+        self.view.graph.stageSquare(sel)
         self.view.graph.applyChanges()
         self.view.update()
         self.focus_position = fcp + 1
-    elif key in keybindings['remove-link-or-backlink']:
+    elif key in keybindings['remove-street-or-incommingStreet']:
       try:
         fcp = self.focus_position
-        node = self.nodes[fcp]
-        selectedNode = copy.deepcopy(self.view.graph[self.view.selection])
-        selectedNode.links.remove(node.nodeId)
-        self.view.graph.stageNode(selectedNode)
+        square = self.squares[fcp]
+        selectedSquare = copy.deepcopy(self.view.graph[self.view.selection])
+        selectedSquare.streets.remove(square.squareId)
+        self.view.graph.stageSquare(selectedSquare)
         self.view.graph.applyChanges()
         self.view.update()
       except IndexError:
         pass
     else:
-      return super(LinksList,self).keypress(size,key)
+      return super(StreetsList,self).keypress(size,key)
 
 class SearchBox(urwid.ListBox):
   def __init__(self,view):
     self.view = view
-    self.nodes = self.view.graph
+    self.squares = self.view.graph
     super(SearchBox,self).__init__(urwid.SimpleFocusListWalker([]))
     self.searchEdit = urwid.Edit()
     self.body.append(self.searchEdit)
     self.update()
 
   def update(self):
-    self.nodes = []
+    self.squares = []
     items = []
-    for node in self.view.graph:
-      if node.text is not None:
-        if self.searchEdit.edit_text in node.text:
-          self.nodes.append(node)
-          items.append(urwid.Padding(urwid.SelectableIcon(node.title,0),align='left',width="pack"))
+    for square in self.view.graph:
+      if square.text is not None:
+        if self.searchEdit.edit_text in square.text:
+          self.squares.append(square)
+          items.append(urwid.Padding(urwid.SelectableIcon(square.title,0),align='left',width="pack"))
     del self.body[1:]
     self.body.extend(items)
     self.focus_position = 0
 
   @property
-  def focused_node(self):
+  def focused_square(self):
     if self.focus_position > 0:
-      return self.nodes[self.focus_position-1].nodeId
+      return self.squares[self.focus_position-1].squareId
     else:
-      raise IndexError("No focused node.")
+      raise IndexError("No focused square.")
 
   def keypress(self,size,key):
     if self.focus_position == 0:
@@ -802,17 +802,17 @@ class SearchBox(urwid.ListBox):
     elif key in keybindings['jump-to-command-bar']:
       self.view.focus_position = 'footer'
     elif key == 'enter':
-      self.view.selection = self.focused_node
-      self.view.currentNode.mode = 'command'
+      self.view.selection = self.focused_square
+      self.view.currentSquare.mode = 'command'
       self.view.mode = 'mge'
       self.view.update()
     elif key in keybindings['insert-mode']:
-      self.view.selection = self.focused_node
-      self.view.currentNode.mode = 'insert'
+      self.view.selection = self.focused_square
+      self.view.currentSquare.mode = 'insert'
       self.view.mode = 'mge'
       self.view.update()
     elif key in keybindings['add-to-stack']:
-      self.view.clipboard.nodes.append(self.view.graph[self.focused_node])
+      self.view.clipboard.squares.append(self.view.graph[self.focused_square])
       self.view.update()
     else:
       return super(SearchBox,self).keypress(size,key)
@@ -851,15 +851,15 @@ class CommandBar(urwid.Edit):
         if newSelection >= 0 and newSelection < len(self.view.graph) and self.view.graph[newSelection].text is not None:
           self.view.selection = newSelection
           self.view.update()
-          self.view.focus_item = self.view.currentNodeWidget
-          self.view.currentNode.mode = 'command'
+          self.view.focus_item = self.view.currentSquareWidget
+          self.view.currentSquare.mode = 'command'
           success = True
         else:
-          self.edit.set_caption("Cannot jump to "+com+". Node does not exist.\n:")
+          self.edit.set_caption("Cannot jump to "+com+". Square does not exist.\n:")
       except ValueError:
         pass
     if success:
-      self.view.focus_item = self.view.currentNodeWidget
+      self.view.focus_item = self.view.currentSquareWidget
       self.edit.edit_text = ""
     else:
       self.edit.set_caption(com + " is not a valid mge command.\n:")
@@ -867,16 +867,16 @@ class CommandBar(urwid.Edit):
 keybindings = {
  # global/command-mode
  'back' : ['meta left','b'],
- 'link-or-back-link-last-stack-item' : ['p'],
+ 'street-or-back-street-last-stack-item' : ['p'],
  'add-to-stack' : ['c'],
- 'move-node-up' : ['ctrl up'],
- 'move-node-down' : ['ctrl down'],
- 'new-node' : ['n'],
- 'new-node-linked-to-previous-node' : ['meta enter'],
- 'remove-link-or-backlink' : ['d'],
- 'delete-node' : ['delete'],
+ 'move-square-up' : ['ctrl up'],
+ 'move-square-down' : ['ctrl down'],
+ 'new-square' : ['n'],
+ 'new-square-streeted-to-previous-square' : ['meta enter'],
+ 'remove-street-or-incommingStreet' : ['d'],
+ 'delete-square' : ['delete'],
  'delete-tree' : ['ctrl delete'],
- 'move-to-node-zero' : ['.'],
+ 'move-to-square-zero' : ['.'],
  'jump-to-command-bar' : [':'],
  'leave-and-go-to-mainer-part' : ['esc'],
  'move-up-one-mega-widget' : ['meta up'],
@@ -893,13 +893,13 @@ keybindings = {
  'show-map': ['m'],
  # stack area
  'remove-from-stack' : ['d'],
- 'link-to-stack-item-no-pop' : ['ctrl right'],
- 'link-to-stack-item' : ['right'],
- 'backlink-to-stack-item-no-pop' : ['ctrl left'],
- 'backlink-to-stack-item' : ['left'],
+ 'street-to-stack-item-no-pop' : ['ctrl right'],
+ 'street-to-stack-item' : ['right'],
+ 'incommingStreet-to-stack-item-no-pop' : ['ctrl left'],
+ 'incommingStreet-to-stack-item' : ['left'],
  }
-pallet = [('backlink_selected', 'white', 'dark blue')
-         ,('link_selected', 'white', 'dark red')
+pallet = [('incommingStreet_selected', 'white', 'dark blue')
+         ,('street_selected', 'white', 'dark red')
          ,('selection','black','white')
          ,('clipboard','white','dark gray')]
 
