@@ -40,6 +40,34 @@ def showErrorDialog(error):
   window.pack()
   root.mainloop()
 
+class Street(list):
+  def __init__(self,name,destination,origin):
+    self.append(name)
+    self.append(destination)
+    self.origin = origin
+
+  @property
+  def name(self):
+    return self[0]
+
+  @name.setter
+  def name(self,value):
+    self[0] = value
+
+  @property
+  def destination(self):
+    return self[1]
+
+  @destination.setter
+  def destination(self,value):
+    self[1] = value
+
+  def __repr__(self):
+    return self.name + "→" + self.destination
+
+  def __eq__(self,other):
+    return self.name == other.name and self.destination == other.destination
+
 class Square():
   def __init__(self,squareId,text,streets):
     self.squareId = squareId
@@ -76,7 +104,7 @@ class TextGraph(list):
 
   def allocSquare(self):
     """
-    Return the ID of a new or free square.
+    Return a new or free square Id.
     """
     if self.deleted:
       return self.deleted.pop()
@@ -101,7 +129,7 @@ class TextGraph(list):
       if not (prevState.text == square.text and prevState.streets == square.streets):
         didSomething = True
         prevState.text = square.text
-        prevState.streets = copy.copy(square.streets)
+        prevState.streets = copy.deepcopy(square.streets)
     if didSomething:
       self.undone = []
       self.stagedSquares = []
@@ -119,7 +147,7 @@ class TextGraph(list):
     for (prevState,postState) in transaction:
       currentState = self[prevState.squareId]
       currentState.text = prevState.text
-      currentState.streets = copy.copy(prevState.streets)
+      currentState.streets = copy.deepcopy(prevState.streets)
     self.undone.append(transaction)
 
   def redo(self):
@@ -131,7 +159,7 @@ class TextGraph(list):
     for (prevState,postState) in transaction:
       currentState = self[postState.squareId]
       currentState.text = postState.text
-      currentState.streets = copy.copy(postState.streets)
+      currentState.streets = copy.deepcopy(postState.streets)
     self.done.append(transaction)
 
   def trimBlankSquaresFromEnd(self):
@@ -149,27 +177,31 @@ class TextGraph(list):
   def getIncommingStreets(self,squareId):
     incommingStreets = []
     for square in self:
-      if squareId in square.streets:
-        incommingStreets.append(square.squareId)
+      for street in square.streets:
+        if squareId == street.destination:
+          incommingStreets.append(street)
     return incommingStreets
 
-  def newSquareStreetedFromSquare(self,streetedSquareId):
+  def newLinkedSquare(self,streetedSquareId):
     newSquareId = self.allocSquare()
     newSquare = Square(newSquareId,"",[])
     selectedSquare = copy.deepcopy(self[streetedSquareId])
-    selectedSquare.streets.append(newSquareId)
+    selectedSquare.streets.append(Street("",newSquareId,selectedSquare.squareId))
     self.stageSquare(newSquare)
     self.stageSquare(selectedSquare)
     self.applyChanges()
     return newSquareId
 
   def getDeleteSquareChanges(self,squareId):
+    """
+    Get the changes that need to be preformed in order to delete a square.
+    """
     changes = []
     for incommingStreet in self.getIncommingStreets(squareId):
       if incommingStreet != squareId:
-        incommingStreetingSquare = copy.deepcopy(self[incommingStreet])
-        incommingStreetingSquare.streets = [value for value in incommingStreetingSquare.streets if value != squareId]
-        changes.append(incommingStreetingSquare)
+        incommingStreetDestination = copy.deepcopy(self[incommingStreet.destination])
+        incommingStreetDestination.streets = [street for street in incommingStreetDestination.streets if street.destination != squareId]
+        changes.append(incommingStreetDestination)
     changes.append(Square(squareId,None,[]))
     return changes
 
@@ -185,8 +217,8 @@ class TextGraph(list):
     square = self[squareId]
     tree = set([square.squareId])
     for street in square.streets:
-      if not street in tree:
-        tree.update(self.getTree(street))
+      if not street.destination in tree:
+        tree.update(self.getTree(street.destination))
     return tree
 
   def deleteTree(self,squareId):
@@ -195,8 +227,8 @@ class TextGraph(list):
       if not square.squareId in squaresForDeletion:
         newStreets = []
         for street in square.streets:
-          if not street in squaresForDeletion:
-            newStreets.append(street)
+          if not street.destination in squaresForDeletion:
+            newStreets.append(street.destination)
         if newStreets != square.streets:
           self.stageSquare(Square(square.squareId,square.text,newStreets))
     for square in squaresForDeletion:
@@ -217,6 +249,7 @@ class TextGraph(list):
     self.header = ""
     readingHeader = True
     squareId = 0
+    lineNo = 0
     for line in text.splitlines():
       if not line or line.startswith("#"):
         if readingHeader:
@@ -224,11 +257,15 @@ class TextGraph(list):
       else:
         readingHeader = False
         try:
-          (text,streets) = json.loads(line)
+          (text,streetsList) = json.loads(line)
+          streets = []
+          for streetName,destination in streetsList:
+            streets.append(Street(streetName,destination,squareId))
           self.append(Square(squareId,text,streets))
           squareId += 1
         except ValueError as e:
-          sys.exit("Cannot load file "+self.fileName+"\n"+str(e))
+          sys.exit("Cannot load file "+self.fileName+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
+      lineNo += 1
 
   @property
   def dot(self):
@@ -239,7 +276,7 @@ class TextGraph(list):
       if square.text is not None:
         labels += str(square.squareId)+"[label="+json.dumps(square.title)+"]\n"
         for street in square.streets:
-          edges += str(square.squareId)+" -> "+str(street)+"\n"
+          edges += str(square.squareId)+" -> "+str(street.destination)+" [label="+json.dumps(street.name)+"]\n"
     dot += labels
     dot += edges
     dot += "}"
@@ -298,20 +335,15 @@ class GraphView(urwid.Frame):
     # incommingStreets
     incommingStreets = []
     for incommingStreet in self.graph.getIncommingStreets(self.selection):
-      incommingStreets.append(copy.deepcopy(self.graph[incommingStreet]))
+      incommingStreets.append(copy.deepcopy(incommingStreet))
     self.incommingStreets.update(incommingStreets)
     # current square
     self.currentSquare.edit_text = self.graph[self.selection].text
     # streets
-    squares = []
-    for squareId in self.graph[self.selection].streets:
-      try:
-        squares.append(copy.deepcopy(self.graph[squareId]))
-      except IndexError as e:
-        raise IndexError("squareId:"+str(squareId)+"\nselection:"+str(self.selection)+str(self.graph.json))
-    self.streets.update(squares)
+    self.streets.update(self.graph[self.selection].streets)
 
   def updateStatusBar(self):
+    submode = ""
     if self.graph.edited:
       edited = "Edited"
     else:
@@ -323,17 +355,19 @@ class GraphView(urwid.Frame):
         currentSquareId = 0
     elif self.focus_item == self.incommingStreets:
       try:
-        currentSquareId = self.incommingStreets.squares[self.incommingStreets.focus_position].squareId
+        currentSquareId = self.incommingStreets.streets[self.incommingStreets.focus_position].origin
       except IndexError:
         currentSquareId = self.selection
     elif self.focus_item == self.streets:
       try:
-        currentSquareId = self.streets.squares[self.streets.focus_position].squareId
+        currentSquareId = self.streets.streets[self.streets.focus_position].destination
       except IndexError:
         currentSquareId = self.selection
     else:
       currentSquareId = self.selection
-    self.statusBar.set_text("Square: "+str(currentSquareId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" Mode: "+self.mode+" "+self.currentSquare.mode+" | "+self.statusMessage)
+    if self.focus_item == self.currentSquareWidget:
+      submode = self.currentSquare.mode
+    self.statusBar.set_text("□:"+str(currentSquareId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" Mode: "+self.mode+" "+submode+" | "+self.statusMessage)
 
   def recordChanges(self):
     if self.graph[self.selection].text != self.currentSquare.edit_text:
@@ -429,7 +463,7 @@ class GraphView(urwid.Frame):
           self.focus_position = 'header'
       elif self.focus_position == 'header':
         pass
-    elif not self.inEditArea() or (self.focus_item == self.currentSquareWidget and self.currentSquare.mode == 'command'):
+    elif not self.inEditArea() or self.currentSquare.mode == 'command':
       self.recordChanges()
       if key in keybindings["back"]:
         if self.history:
@@ -534,7 +568,7 @@ class Clipboard(SquareList):
         if not key in keybindings['street-to-stack-item-no-pop']:
           del self.squares[fcp]
         currentSquare = copy.deepcopy(self.view.graph[self.view.selection])
-        currentSquare.streets.append(square.squareId)
+        currentSquare.streets.append(Street("",square.squareId,currentSquare.squareId))
         self.view.graph.stageSquare(currentSquare)
         self.view.graph.applyChanges()
         self.view.update()
@@ -547,7 +581,7 @@ class Clipboard(SquareList):
         square = self.squares[fcp]
         if not key in keybindings['incommingStreet-to-stack-item-no-pop']:
           del self.squares[fcp]
-        square.streets.append(self.view.selection)
+        square.streets.append(Street("",self.view.selection,square.squareId))
         self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
         self.view.update()
@@ -570,7 +604,7 @@ class CurrentSquare(urwid.Edit):
     if key in keybindings['new-square-streeted-to-previous-square']:
       prevSquare = self.view.history[-1]
       self.view.recordChanges()
-      newSquareId = self.view.graph.newSquareStreetedFromSquare(prevSquare)
+      newSquareId = self.view.graph.newLinkedSquare(prevSquare)
       self.view.selection = newSquareId
       self.view.history.append(prevSquare)
       self.view.update()
@@ -603,57 +637,81 @@ class CurrentSquare(urwid.Edit):
       self.cursorCords = self.get_cursor_coords(size)
       return value
 
-class SquareNavigator(SquareList):
+class StreetList(urwid.ListBox):
   def __init__(self,view,selectionCollor,alignment):
+    self.view = view
+    self.selectionCollor = selectionCollor
     self.alignment = alignment
-    super(SquareNavigator,self).__init__(selectionCollor,alignment)
+    self.streets = []
+    super(StreetList,self).__init__(urwid.SimpleFocusListWalker([]))
+
+  def update(self,streets=None):
+    if streets is not None:
+      self.streets = streets
+    items = []
+    if not self.streets:
+      items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(" ",0),align=self.alignment,width="pack"),None,self.selectionCollor))
+    for street in self.streets:
+      if self.alignment == 'right':
+        items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(street.name + " → " + self.view.graph[street.destination].title,0),align=self.alignment,width="pack"),None,self.selectionCollor))
+      elif self.alignment == 'left':
+        items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(self.view.graph[street.origin].title + " <- " + street.name,0),align=self.alignment,width="pack"),None,self.selectionCollor))
+    self.body.clear()
+    self.body.extend(items)
+
+class StreetNavigator(StreetList):
+  def __init__(self,view,selectionCollor,alignment):
+    super(StreetNavigator,self).__init__(view,selectionCollor,alignment)
 
   def keypress(self,size,key):
     if key in keybindings['new-square']:
-      self.newSquare()
-    if key in [self.alignment,'enter'] or key in keybindings['insert-mode']:
-      if self.squares:
+      self.newStreetToNewSquare()
+    if key in [self.alignment,'enter']:
+      if self.streets:
         self.view.recordChanges()
-        self.view.selection = self.squares[self.focus_position].squareId
+        if self.alignment == 'right':
+          self.view.selection = self.streets[self.focus_position].destination
+        elif self.alignment == 'left':
+          self.view.selection = self.streets[self.focus_position].origin
         self.view.update()
-        if not key == self.alignment:
+        if key == 'enter':
           self.view.focus_item = self.view.currentSquareWidget
+          self.view.currentSquare.mode = 'insert'
       else:
-        self.newSquare()
+        self.newStreetToNewSquare()
     if key in keybindings["delete-square"]:
-      if self.squares:
-        squareId = self.squares[self.focus_position].squareId
+      if self.street:
+        squareId = self.streets[self.focus_position].destination
         if squareId != 0:
           self.view.graph.deleteSquare(squareId)
           self.view.update()
         else:
           self.view.statusMessage = "Cannot delete square 0."
     if key in keybindings["delete-tree"]:
-      if self.squares:
-        squareId = self.squares[self.focus_position].squareId
+      if self.streets:
+        squareId = self.streets[self.focus_position].destination
         if squareId != 0:
           self.view.graph.deleteTree(squareId)
           self.view.update()
         else:
           self.view.statusMessage = "Cannot delete square 0."
     if key in keybindings["add-to-stack"]:
-      if self.squares:
-        self.view.clipboard.squares.append(self.squares[self.focus_position])
+      if self.streets:
+        self.view.clipboard.squares.append(self.view.graph[self.streets[self.focus_position].destination])
         fcp = self.focus_position
         self.view.update()
         self.focus_position = fcp
     else:
-      return super(SquareNavigator,self).keypress(size,key)
+      return super(StreetNavigator,self).keypress(size,key)
 
-class IncommingStreetsList(SquareNavigator):
+class IncommingStreetsList(StreetNavigator):
   def __init__(self,view):
-    self.view = view
     super(IncommingStreetsList,self).__init__(view,'incommingStreet_selected','left')
 
-  def newSquare(self):
+  def newStreetToNewSquare(self):
     self.view.recordChanges()
     squareId = self.view.graph.allocSquare()
-    square = Square(squareId,"",[self.view.selection])
+    square = Square(squareId,"",[Street("",self.view.selection,squareId)])
     self.view.selection = square.squareId
     self.view.graph.stageSquare(square)
     self.view.graph.applyChanges()
@@ -671,16 +729,17 @@ class IncommingStreetsList(SquareNavigator):
     if key in keybindings['street-or-back-street-last-stack-item']:
       if self.view.clipboard.squares:
         square = self.view.clipboard.squares.pop()
-        square.streets.append(self.view.selection)
+        square.streets.append(Street("",self.view.selection,square.squareId))
         self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
         self.view.update()
-        self.focus_position = len(self.squares) - 1
+        self.focus_position = len(self.streets) - 1
     elif key in keybindings['remove-street-or-incommingStreet']:
       try:
         fcp = self.focus_position
-        square = self.squares[fcp]
-        square.streets.remove(self.view.selection)
+        street = self.streets[fcp]
+        square = copy.deepcopy(self.view.graph[street.origin])
+        square.streets = [street for street in square.streets if street.destination != self.view.selection]
         self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
         self.view.update()
@@ -689,14 +748,14 @@ class IncommingStreetsList(SquareNavigator):
     else:
       return super(IncommingStreetsList,self).keypress(size,key)
 
-class StreetsList(SquareNavigator):
+class StreetsList(StreetNavigator):
   def __init__(self,view):
     self.view = view
     super(StreetsList,self).__init__(view,'street_selected','right')
 
-  def newSquare(self):
+  def newStreetToNewSquare(self):
     self.view.recordChanges()
-    newSquareId = self.view.graph.newSquareStreetedFromSquare(self.view.selection)
+    newSquareId = self.view.graph.newLinkedSquare(self.view.selection)
     self.view.selection = newSquareId
     self.view.update()
     self.view.focus_item = self.view.currentSquareWidget
