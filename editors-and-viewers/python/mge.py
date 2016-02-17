@@ -27,6 +27,7 @@ import json
 import optparse
 import copy
 import subprocess
+import os
 try:
   import urwid
 except ImportError:
@@ -290,7 +291,7 @@ class TextGraph(list):
       fd.write(self.json)
 
   def saveDraft(self):
-    with open("."+self.fileName+".draft","w") as fd:
+    with open(os.path.join(os.path.dirname(self.fileName),"."+os.path.basename(self.fileName)+".draft"),"w") as fd:
       fd.write(self.json)
 
   def saveDot(self):
@@ -299,7 +300,7 @@ class TextGraph(list):
 
 class GraphView(urwid.Frame):
   def __init__(self,graph):
-    self.__mode = 'mge'
+    self.__mode = 'command'
     self.clipboard = ""
     self.graph = graph
     self._selection = 0
@@ -343,7 +344,6 @@ class GraphView(urwid.Frame):
     self.streets.update(self.graph[self.selection].streets)
 
   def updateStatusBar(self):
-    submode = ""
     if self.graph.edited:
       edited = "Edited"
     else:
@@ -365,9 +365,7 @@ class GraphView(urwid.Frame):
         currentSquareId = self.selection
     else:
       currentSquareId = self.selection
-    if self.focus_item == self.currentSquareWidget:
-      submode = self.currentSquare.mode
-    self.statusBar.set_text("□:"+str(currentSquareId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" Mode: "+self.mode+" "+submode+" | "+self.statusMessage)
+    self.statusBar.set_text("□:"+str(currentSquareId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" Mode: "+self.mode+" | "+self.statusMessage)
 
   def recordChanges(self):
     if self.graph[self.selection].text != self.currentSquare.edit_text:
@@ -409,10 +407,12 @@ class GraphView(urwid.Frame):
     return self.__mode
   @mode.setter
   def mode(self,value):
-    if value == 'mge':
+    if value == 'command':
       self.body.original_widget = self.pile
     elif value == 'search':
       self.body.original_widget = self.searchBox
+    elif value == 'insert':
+      pass
     else:
       raise ValueError("Invalid mode"+value)
     self.__mode = value
@@ -438,7 +438,7 @@ class GraphView(urwid.Frame):
       return super(GraphView,self).keypress(size,key)
     if key in keybindings['command-mode']:
       self.recordChanges()
-      self.currentSquare.mode = 'command'
+      self.mode = 'command'
     elif key in keybindings['move-down-one-mega-widget']:
       self.recordChanges()
       if self.focus_position == 'header':
@@ -463,7 +463,7 @@ class GraphView(urwid.Frame):
           self.focus_position = 'header'
       elif self.focus_position == 'header':
         pass
-    elif not self.inEditArea() or self.currentSquare.mode == 'command':
+    elif not self.inEditArea() or self.mode == 'command':
       self.recordChanges()
       if key in keybindings["back"]:
         if self.history:
@@ -512,8 +512,7 @@ class GraphView(urwid.Frame):
         self.focus_position = 'body'
         return None
       else:
-        self.currentSquare.mode = 'command'
-        self.mode = 'mge'
+        self.mode = 'command'
         self.body.original_widget = self.pile
         self.updateStatusBar()
         return None
@@ -586,7 +585,6 @@ class Clipboard(SquareList):
 
 class CurrentSquare(urwid.Edit):
   def __init__(self,view):
-    self.mode = 'command'
     self.selection = (0,0)
     self.view = view
     super(CurrentSquare,self).__init__(edit_text="",align="left",multiline=True)
@@ -604,9 +602,9 @@ class CurrentSquare(urwid.Edit):
       self.view.selection = newSquareId
       self.view.history.append(prevSquare)
       self.view.update()
-    if self.mode =='command':
+    if self.view.mode =='command':
       if key in keybindings['insert-mode']:
-        self.mode = 'insert'
+        self.view.mode = 'insert'
       if key in keybindings['add-to-stack']:
         self.view.clipboard.squares.append(self.view.graph[self.view.selection])
         self.view.update()
@@ -653,7 +651,7 @@ class StreetList(urwid.ListBox):
       if self.alignment == 'right':
         items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(street.name + " → " + self.view.graph[street.destination].title,0),align=self.alignment,width="pack"),None,self.selectionCollor))
       elif self.alignment == 'left':
-        items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(self.view.graph[street.origin].title + " <- " + street.name,0),align=self.alignment,width="pack"),None,self.selectionCollor))
+        items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(self.view.graph[street.origin].title + " → " + street.name,0),align=self.alignment,width="pack"),None,self.selectionCollor))
     self.body.clear()
     self.body.extend(items)
 
@@ -674,7 +672,7 @@ class StreetNavigator(StreetList):
         self.view.update()
         if key == 'enter':
           self.view.focus_item = self.view.currentSquareWidget
-          self.view.currentSquare.mode = 'insert'
+          self.view.mode = 'insert'
       else:
         self.newStreetToNewSquare()
     if key in keybindings["delete-square"]:
@@ -715,7 +713,7 @@ class IncommingStreetsList(StreetNavigator):
     self.view.graph.applyChanges()
     self.view.update()
     self.view.focus_item = self.view.currentSquareWidget
-    self.view.currentSquare.mode = 'insert-mode'
+    self.view.mode = 'insert'
 
   def keypress(self,size,key):
     if key in ['right']:
@@ -860,13 +858,11 @@ class SearchBox(urwid.ListBox):
       self.view.focus_position = 'footer'
     elif key == 'enter':
       self.view.selection = self.focused_square
-      self.view.currentSquare.mode = 'command'
-      self.view.mode = 'mge'
+      self.view.mode = 'command'
       self.view.update()
     elif key in keybindings['insert-mode']:
       self.view.selection = self.focused_square
-      self.view.currentSquare.mode = 'insert'
-      self.view.mode = 'mge'
+      self.view.mode = 'insert'
       self.view.update()
     elif key in keybindings['add-to-stack']:
       self.view.clipboard.squares.append(self.view.graph[self.focused_square])
@@ -909,7 +905,7 @@ class CommandBar(urwid.Edit):
           self.view.selection = newSelection
           self.view.update()
           self.view.focus_item = self.view.currentSquareWidget
-          self.view.currentSquare.mode = 'command'
+          self.view.mode = 'command'
           success = True
         else:
           self.edit.set_caption("Cannot jump to "+com+". Square does not exist.\n:")
