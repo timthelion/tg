@@ -417,9 +417,6 @@ class GraphView(urwid.Frame):
       raise ValueError("Invalid mode"+value)
     self.__mode = value
 
-  def inEditArea(self):
-    return self.focus_item == self.commandBar or self.focus_item == self.currentSquareWidget
-
   def keypress(self,size,key):
     if self.mode == 'search':
       return self.keypressSearchmode(size, key)
@@ -431,12 +428,10 @@ class GraphView(urwid.Frame):
     return value
 
   def handleKeypress(self,size,key):
-    if key in keybindings['leave-and-go-to-mainer-part']:
-      self.focus_item = self.currentSquareWidget
     if key in ['left','right','up','down','home','end']:
       self.recordChanges()
       return super(GraphView,self).keypress(size,key)
-    if key in keybindings['command-mode']:
+    if key in keybindings['command-mode'] and self.mode != 'command':
       self.recordChanges()
       self.mode = 'command'
     elif key in keybindings['move-down-one-mega-widget']:
@@ -463,46 +458,51 @@ class GraphView(urwid.Frame):
           self.focus_position = 'header'
       elif self.focus_position == 'header':
         pass
-    elif not self.inEditArea() or self.mode == 'command':
-      self.recordChanges()
-      if key in keybindings["back"]:
-        if self.history:
-          self._selection = self.history.pop()
-          self.update()
-      elif key in keybindings['move-to-square-zero']:
-        self.selection = 0
-        self.update()
+    elif self.mode == 'command':
+      if key in keybindings['leave-and-go-to-mainer-part']:
         self.focus_item = self.currentSquareWidget
-      elif key in keybindings['search-mode']:
-        self.mode = 'search'
-        self.searchBox.searchEdit.edit_text = ""
-        self.searchBox.update()
-        self.updateStatusBar()
-        return None
-      elif key in keybindings['jump-to-command-bar']:
-        self.focus_item = self.commandBar
-      elif key in keybindings['show-map']:
-        return self.graph.showDiagram()
-      elif key in keybindings['command-mode.up']:
-        return super(GraphView,self).keypress(size,'up')
-      elif key in keybindings['command-mode.down']:
-        return super(GraphView,self).keypress(size,'down')
-      elif key in keybindings['command-mode.left']:
-        return super(GraphView,self).keypress(size,'left')
-      elif key in keybindings['command-mode.right']:
-        return super(GraphView,self).keypress(size,'right')
-      elif key in keybindings['command-mode.undo']:
-        self.graph.undo()
-        if self.selection >= len(self.graph):
+      if not self.focus_item == self.commandBar:
+        self.recordChanges()
+        if key in keybindings['insert-mode']:
+          self.mode = 'insert'
+        if key in keybindings["back"]:
+          if self.history:
+            self._selection = self.history.pop()
+            self.update()
+        elif key in keybindings['move-to-square-zero']:
           self.selection = 0
-        if self.graph[self.selection].text is None:
-          self.selection = 0
-        self.update()
-      elif key in keybindings['command-mode.redo']:
-        self.graph.redo()
-        self.update()
-      else:
-        return super(GraphView,self).keypress(size,key)
+          self.update()
+          self.focus_item = self.currentSquareWidget
+        elif key in keybindings['search-mode']:
+          self.mode = 'search'
+          self.searchBox.searchEdit.edit_text = ""
+          self.searchBox.update()
+          self.updateStatusBar()
+          return None
+        elif key in keybindings['jump-to-command-bar']:
+          self.focus_item = self.commandBar
+        elif key in keybindings['show-map']:
+          return self.graph.showDiagram()
+        elif key in keybindings['command-mode.up']:
+          return super(GraphView,self).keypress(size,'up')
+        elif key in keybindings['command-mode.down']:
+          return super(GraphView,self).keypress(size,'down')
+        elif key in keybindings['command-mode.left']:
+          return super(GraphView,self).keypress(size,'left')
+        elif key in keybindings['command-mode.right']:
+          return super(GraphView,self).keypress(size,'right')
+        elif key in keybindings['command-mode.undo']:
+          self.graph.undo()
+          if self.selection >= len(self.graph):
+            self.selection = 0
+          if self.graph[self.selection].text is None:
+            self.selection = 0
+          self.update()
+        elif key in keybindings['command-mode.redo']:
+          self.graph.redo()
+          self.update()
+        else:
+          return super(GraphView,self).keypress(size,key)
     else:
       return super(GraphView,self).keypress(size,key)
 
@@ -603,8 +603,6 @@ class CurrentSquare(urwid.Edit):
       self.view.history.append(prevSquare)
       self.view.update()
     if self.view.mode =='command':
-      if key in keybindings['insert-mode']:
-        self.view.mode = 'insert'
       if key in keybindings['add-to-stack']:
         self.view.clipboard.squares.append(self.view.graph[self.view.selection])
         self.view.update()
