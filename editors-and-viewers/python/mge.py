@@ -803,9 +803,9 @@ class StreetsList(StreetNavigator):
     elif key in keybindings['remove-street-or-incommingStreet']:
       try:
         fcp = self.focus_position
-        square = self.squares[fcp]
+        street = self.streets[fcp]
         selectedSquare = copy.deepcopy(self.view.graph[self.view.selection])
-        selectedSquare.streets.remove(square.squareId)
+        selectedSquare.streets.remove(street)
         self.view.graph.stageSquare(selectedSquare)
         self.view.graph.applyChanges()
         self.view.update()
