@@ -486,6 +486,8 @@ class GraphView(urwid.Frame):
           self.focus_item = self.commandBar
         elif key in keybindings['show-map']:
           return self.graph.showDiagram()
+        elif key in keybindings['clear-default-street-name']:
+          self.defaultStreetName = ""
         elif key in keybindings['command-mode.up']:
           return super(GraphView,self).keypress(size,'up')
         elif key in keybindings['command-mode.down']:
@@ -948,6 +950,7 @@ keybindings = {
  'insert-mode' : ['i'],
  'search-mode' : ['/'],
  'show-map': ['m'],
+ 'clear-default-street-name': ['F'],
  # street navigator
  'set-default-street-name': ['f'],
  # stack area
