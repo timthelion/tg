@@ -481,10 +481,6 @@ class GraphView(urwid.Frame):
         return None
       elif key in keybindings['jump-to-command-bar']:
         self.focus_item = self.commandBar
-      elif key in keybindings['insert-mode']:
-        self.currentSquare.mode = 'insert'
-        if not self.inEditArea():
-          return super(GraphView,self).keypress(size,key)
       elif key in keybindings['show-map']:
         return self.graph.showDiagram()
       elif key in keybindings['command-mode.up']:
@@ -609,6 +605,8 @@ class CurrentSquare(urwid.Edit):
       self.view.history.append(prevSquare)
       self.view.update()
     if self.mode =='command':
+      if key in keybindings['insert-mode']:
+        self.mode = 'insert'
       if key in keybindings['add-to-stack']:
         self.view.clipboard.squares.append(self.view.graph[self.view.selection])
         self.view.update()
@@ -789,13 +787,13 @@ class StreetsList(StreetNavigator):
       self.view.focus_item = self.view.incommingStreets
     elif key in keybindings['street-or-back-street-last-stack-item']:
       if self.view.clipboard.squares:
-        if self.squares:
+        if self.streets:
           fcp = self.focus_position
         else:
           fcp = -1
         square = self.view.clipboard.squares.pop()
         sel = copy.deepcopy(self.view.graph[self.view.selection])
-        sel.streets.insert(fcp + 1,square.squareId)
+        sel.streets.insert(fcp + 1,Street("",square.squareId,self.view.selection))
         self.view.graph.stageSquare(sel)
         self.view.graph.applyChanges()
         self.view.update()
