@@ -461,7 +461,9 @@ class GraphView(urwid.Frame):
     elif self.mode == 'command':
       if key in keybindings['leave-and-go-to-mainer-part']:
         self.focus_item = self.currentSquareWidget
-      if not self.focus_item == self.commandBar:
+      if self.focus_item == self.commandBar:
+        return super(GraphView,self).keypress(size,key)
+      else:
         self.recordChanges()
         if key in keybindings['insert-mode']:
           self.mode = 'insert'
