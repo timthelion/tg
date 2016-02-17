@@ -183,11 +183,11 @@ class TextGraph(list):
           incommingStreets.append(street)
     return incommingStreets
 
-  def newLinkedSquare(self,streetedSquareId):
+  def newLinkedSquare(self,streetedSquareId,streetName):
     newSquareId = self.allocSquare()
     newSquare = Square(newSquareId,"",[])
     selectedSquare = copy.deepcopy(self[streetedSquareId])
-    selectedSquare.streets.append(Street("",newSquareId,selectedSquare.squareId))
+    selectedSquare.streets.append(Street(streetName,newSquareId,selectedSquare.squareId))
     self.stageSquare(newSquare)
     self.stageSquare(selectedSquare)
     self.applyChanges()
@@ -301,6 +301,7 @@ class TextGraph(list):
 class GraphView(urwid.Frame):
   def __init__(self,graph):
     self.__mode = 'command'
+    self.defaultStreetName = ""
     self.clipboard = ""
     self.graph = graph
     self._selection = 0
@@ -365,7 +366,7 @@ class GraphView(urwid.Frame):
         currentSquareId = self.selection
     else:
       currentSquareId = self.selection
-    self.statusBar.set_text("□:"+str(currentSquareId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" Mode: "+self.mode+" | "+self.statusMessage)
+    self.statusBar.set_text("□:"+str(currentSquareId) + " " + edited + " Undo: "+str(len(self.graph.done))+" Redo: "+str(len(self.graph.undone))+" Mode: "+self.mode+" → "+self.defaultStreetName+" | "+self.statusMessage)
 
   def recordChanges(self):
     if self.graph[self.selection].text != self.currentSquare.edit_text:
@@ -565,7 +566,7 @@ class Clipboard(SquareList):
         if not key in keybindings['street-to-stack-item-no-pop']:
           del self.squares[fcp]
         currentSquare = copy.deepcopy(self.view.graph[self.view.selection])
-        currentSquare.streets.append(Street("",square.squareId,currentSquare.squareId))
+        currentSquare.streets.append(Street(self.view.defaultStreetName,square.squareId,currentSquare.squareId))
         self.view.graph.stageSquare(currentSquare)
         self.view.graph.applyChanges()
         self.view.update()
@@ -578,7 +579,7 @@ class Clipboard(SquareList):
         square = self.squares[fcp]
         if not key in keybindings['incommingStreet-to-stack-item-no-pop']:
           del self.squares[fcp]
-        square.streets.append(Street("",self.view.selection,square.squareId))
+        square.streets.append(Street(self.view.defaultStreetName,self.view.selection,square.squareId))
         self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
         self.view.update()
@@ -600,7 +601,7 @@ class CurrentSquare(urwid.Edit):
     if key in keybindings['new-square-streeted-to-previous-square']:
       prevSquare = self.view.history[-1]
       self.view.recordChanges()
-      newSquareId = self.view.graph.newLinkedSquare(prevSquare)
+      newSquareId = self.view.graph.newLinkedSquare(prevSquare,self.view.defaultStreetName)
       self.view.selection = newSquareId
       self.view.history.append(prevSquare)
       self.view.update()
@@ -662,6 +663,9 @@ class StreetNavigator(StreetList):
   def keypress(self,size,key):
     if key in keybindings['new-square']:
       self.newStreetToNewSquare()
+    if key in keybindings['set-default-street-name']:
+      if self.streets:
+        self.view.defaultStreetName = self.streets[self.focus_position].name
     if key in [self.alignment,'enter']:
       if self.streets:
         self.view.recordChanges()
@@ -707,7 +711,7 @@ class IncommingStreetsList(StreetNavigator):
   def newStreetToNewSquare(self):
     self.view.recordChanges()
     squareId = self.view.graph.allocSquare()
-    square = Square(squareId,"",[Street("",self.view.selection,squareId)])
+    square = Square(squareId,"",[Street(self.view.defaultStreetName,self.view.selection,squareId)])
     self.view.selection = square.squareId
     self.view.graph.stageSquare(square)
     self.view.graph.applyChanges()
@@ -725,7 +729,7 @@ class IncommingStreetsList(StreetNavigator):
     if key in keybindings['street-or-back-street-last-stack-item']:
       if self.view.clipboard.squares:
         square = self.view.clipboard.squares.pop()
-        square.streets.append(Street("",self.view.selection,square.squareId))
+        square.streets.append(Street(self.view.defaultStreetName,self.view.selection,square.squareId))
         self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
         self.view.update()
@@ -751,7 +755,7 @@ class StreetsList(StreetNavigator):
 
   def newStreetToNewSquare(self):
     self.view.recordChanges()
-    newSquareId = self.view.graph.newLinkedSquare(self.view.selection)
+    newSquareId = self.view.graph.newLinkedSquare(self.view.selection,self.view.defaultStreetName)
     self.view.selection = newSquareId
     self.view.update()
     self.view.focus_item = self.view.currentSquareWidget
@@ -791,7 +795,7 @@ class StreetsList(StreetNavigator):
           fcp = -1
         square = self.view.clipboard.squares.pop()
         sel = copy.deepcopy(self.view.graph[self.view.selection])
-        sel.streets.insert(fcp + 1,Street("",square.squareId,self.view.selection))
+        sel.streets.insert(fcp + 1,Street(self.view.defaultStreetName,square.squareId,self.view.selection))
         self.view.graph.stageSquare(sel)
         self.view.graph.applyChanges()
         self.view.update()
@@ -944,6 +948,8 @@ keybindings = {
  'insert-mode' : ['i'],
  'search-mode' : ['/'],
  'show-map': ['m'],
+ # street navigator
+ 'set-default-street-name': ['f'],
  # stack area
  'remove-from-stack' : ['d'],
  'street-to-stack-item-no-pop' : ['ctrl right'],
