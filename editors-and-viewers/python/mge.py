@@ -471,6 +471,7 @@ class GraphView(urwid.Frame):
         self.recordChanges()
         if key in keybindings['insert-mode']:
           self.mode = 'insert'
+          return None
         if key in keybindings["back"]:
           if self.history:
             self._selection = self.history.pop()
