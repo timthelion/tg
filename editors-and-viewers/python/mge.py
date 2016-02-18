@@ -268,14 +268,17 @@ class TextGraph(list):
           sys.exit("Cannot load file "+self.fileName+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
       lineNo += 1
 
-  @property
-  def dot(self):
+  def dot(self,markedSquares={}):
     dot = "digraph graphname{\n"
     labels = ""
     edges = ""
     for square in self:
       if square.text is not None:
-        labels += str(square.squareId)+"[label="+json.dumps(square.title)+"]\n"
+        markings = ""
+        if square.squareId in markedSquares:
+          for attr,value in markedSquares[square.squareId].items():
+            markings += "," + attr + " = " + value
+        labels += str(square.squareId)+"[label="+json.dumps(square.title)+markings+"]\n"
         for street in square.streets:
           edges += str(square.squareId)+" -> "+str(street.destination)+" [label="+json.dumps(street.name)+"]\n"
     dot += labels
@@ -283,8 +286,8 @@ class TextGraph(list):
     dot += "}"
     return dot
 
-  def showDiagram(self):
-    subprocess.Popen(["dot","-T","xlib","/dev/stdin"],stdin=subprocess.PIPE).communicate(input=self.dot.encode("ascii"))
+  def showDiagram(self,markedSquares={}):
+    subprocess.Popen(["dot","-T","xlib","/dev/stdin"],stdin=subprocess.PIPE).communicate(input=self.dot(markedSquares).encode("ascii"))
 
   def save(self):
     with open(self.fileName,"w") as fd:
@@ -296,7 +299,7 @@ class TextGraph(list):
 
   def saveDot(self):
     with open(self.fileName+".dot","w") as fd:
-      fd.write(self.dot)
+      fd.write(self.dot())
 
 class GraphView(urwid.Frame):
   def __init__(self,graph):
@@ -485,7 +488,7 @@ class GraphView(urwid.Frame):
         elif key in keybindings['jump-to-command-bar']:
           self.focus_item = self.commandBar
         elif key in keybindings['show-map']:
-          return self.graph.showDiagram()
+          return self.graph.showDiagram(markedSquares={self.selection:{"fontcolor":"white","fillcolor":"black","style":"filled"}})
         elif key in keybindings['clear-default-street-name']:
           self.defaultStreetName = ""
         elif key in keybindings['command-mode.up']:
