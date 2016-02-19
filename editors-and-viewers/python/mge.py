@@ -316,7 +316,7 @@ class GraphView(urwid.Frame):
     self.incommingStreets = IncommingStreetsList(self)
     # current square
     self.currentSquare = CurrentSquare(self)
-    self.currentSquareWidget = urwid.Filler(urwid.AttrMap(self.currentSquare,None,"selection"))
+    self.currentSquareWidget = urwid.Padding(urwid.Filler(urwid.AttrMap(self.currentSquare,None,"selection")),left=3)
     # streets
     self.streets = StreetsList(self)
     # status bar
@@ -377,6 +377,8 @@ class GraphView(urwid.Frame):
       currentSquare.text = self.currentSquare.edit_text
       self.graph.stageSquare(currentSquare)
       self.graph.applyChanges()
+    self.streets.recordChanges()
+    self.incommingStreets.recordChanges()
 
   @property
   def selection(self):
@@ -411,15 +413,16 @@ class GraphView(urwid.Frame):
     return self.__mode
   @mode.setter
   def mode(self,value):
+    self.__mode = value
     if value == 'command':
       self.body.original_widget = self.pile
+      self.update()
     elif value == 'search':
       self.body.original_widget = self.searchBox
     elif value == 'insert':
-      pass
+      self.update()
     else:
       raise ValueError("Invalid mode"+value)
-    self.__mode = value
 
   def keypress(self,size,key):
     if self.mode == 'search':
@@ -640,33 +643,43 @@ class CurrentSquare(urwid.Edit):
       self.cursorCords = self.get_cursor_coords(size)
       return value
 
-class StreetList(urwid.ListBox):
+class StreetNavigator(urwid.ListBox):
   def __init__(self,view,selectionCollor,alignment):
     self.view = view
     self.selectionCollor = selectionCollor
     self.alignment = alignment
     self.streets = []
-    super(StreetList,self).__init__(urwid.SimpleFocusListWalker([]))
+    self.streetNameEdits = []
+    super(StreetNavigator,self).__init__(urwid.SimpleFocusListWalker([]))
 
   def update(self,streets=None):
     if streets is not None:
       self.streets = streets
     items = []
+    self.streetNameEdits = []
     if not self.streets:
       items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(" ",0),align=self.alignment,width="pack"),None,self.selectionCollor))
     for street in self.streets:
       if self.alignment == 'right':
-        items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(street.name + " → " + self.view.graph[street.destination].title,0),align=self.alignment,width="pack"),None,self.selectionCollor))
+        if self.view.mode == 'command':
+          items.append(urwid.Columns([urwid.Text(street.name),urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(" → " + self.view.graph[street.destination].title,0),width="pack"),None,self.selectionCollor)]))
+        elif self.view.mode == 'insert':
+          edit = urwid.Edit(edit_text=street.name)
+          self.streetNameEdits.append(edit)
+          items.append(urwid.Columns([edit,urwid.Text(" → " + self.view.graph[street.destination].title)]))
       elif self.alignment == 'left':
-        items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(self.view.graph[street.origin].title + " → " + street.name,0),align=self.alignment,width="pack"),None,self.selectionCollor))
+        if self.view.mode == 'command':
+          items.append(urwid.Columns([urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(self.view.graph[street.origin].title + " → ",0),width="pack"),None,self.selectionCollor),urwid.Text(street.name)]))
+        elif self.view.mode == 'insert':
+          edit = urwid.Edit(edit_text=street.name)
+          self.streetNameEdits.append(edit)
+          items.append(urwid.Columns([urwid.Text(self.view.graph[street.origin].title + " → "),edit]))
     self.body.clear()
     self.body.extend(items)
 
-class StreetNavigator(StreetList):
-  def __init__(self,view,selectionCollor,alignment):
-    super(StreetNavigator,self).__init__(view,selectionCollor,alignment)
-
   def keypress(self,size,key):
+    if self.view.mode == "insert":
+      return super(StreetNavigator,self).keypress(size,key)
     if key in keybindings['new-square']:
       self.newStreetToNewSquare()
     if key in keybindings['set-default-street-name']:
@@ -714,6 +727,26 @@ class IncommingStreetsList(StreetNavigator):
   def __init__(self,view):
     super(IncommingStreetsList,self).__init__(view,'incommingStreet_selected','left')
 
+  def recordChanges(self):
+    if self.view.mode == "insert":
+      newStreetNamesBySquareOfOrigin = {}
+      for edit,street in zip(self.streetNameEdits,self.streets):
+        if street.origin not in newStreetNamesBySquareOfOrigin:
+          newStreetNamesBySquareOfOrigin[street.origin] = []
+        newStreetNamesBySquareOfOrigin[street.origin].append(edit.edit_text)
+      for squareOfOrigin,streetNames in newStreetNamesBySquareOfOrigin.items():
+        square = copy.deepcopy(self.view.graph[squareOfOrigin])
+        changed = False
+        for street in square.streets:
+          if street.destination == self.view.selection:
+            newStreetName = streetNames.pop()
+            if not street.name == newStreetName:
+              street.name = newStreetName
+              changed = True
+        if changed:
+          self.view.graph.stageSquare(square)
+      self.view.graph.applyChanges()
+
   def newStreetToNewSquare(self):
     self.view.recordChanges()
     squareId = self.view.graph.allocSquare()
@@ -726,6 +759,8 @@ class IncommingStreetsList(StreetNavigator):
     self.view.mode = 'insert'
 
   def keypress(self,size,key):
+    if self.view.mode == "insert":
+      return super(IncommingStreetsList,self).keypress(size,key)
     if key in ['right']:
       self.view.focus_item = self.view.streets
       try:
@@ -759,6 +794,18 @@ class StreetsList(StreetNavigator):
     self.view = view
     super(StreetsList,self).__init__(view,'street_selected','right')
 
+  def recordChanges(self):
+    if self.view.mode == 'insert':
+      square = copy.deepcopy(self.view.graph[self.view.selection])
+      changed = False
+      for street,streetEdit in zip(square.streets,self.streetNameEdits):
+        if not street.name == streetEdit.edit_text:
+          street.name = streetEdit.edit_text
+          changed = True
+      if changed:
+        self.view.graph.stageSquare(square)
+        self.view.graph.applyChanges()
+
   def newStreetToNewSquare(self):
     self.view.recordChanges()
     newSquareId = self.view.graph.newLinkedSquare(self.view.selection,self.view.defaultStreetName)
@@ -767,6 +814,8 @@ class StreetsList(StreetNavigator):
     self.view.focus_item = self.view.currentSquareWidget
 
   def keypress(self,size,key):
+    if self.view.mode == "insert":
+      return super(StreetsList,self).keypress(size,key)
     if key in keybindings['move-square-up']:
       sel = copy.deepcopy(self.view.graph[self.view.selection])
       fcp = self.focus_position
