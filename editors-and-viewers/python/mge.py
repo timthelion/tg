@@ -200,9 +200,9 @@ class TextGraph(list):
     changes = []
     for incommingStreet in self.getIncommingStreets(squareId):
       if incommingStreet != squareId:
-        incommingStreetDestination = copy.deepcopy(self[incommingStreet.destination])
-        incommingStreetDestination.streets = [street for street in incommingStreetDestination.streets if street.destination != squareId]
-        changes.append(incommingStreetDestination)
+        incommingStreetOrigin = copy.deepcopy(self[incommingStreet.origin])
+        incommingStreetOrigin.streets = [street for street in incommingStreetOrigin.streets if street.destination != squareId]
+        changes.append(incommingStreetOrigin)
     changes.append(Square(squareId,None,[]))
     return changes
 
@@ -703,7 +703,7 @@ class StreetNavigator(urwid.ListBox):
         self.view.focus_item = self.view.currentSquareWidget
         self.view.mode = 'insert'
     if key in keybindings["delete-square"]:
-      if self.street:
+      if self.streets:
         squareId = self.streets[self.focus_position].destination
         if squareId != 0:
           self.view.graph.deleteSquare(squareId)
