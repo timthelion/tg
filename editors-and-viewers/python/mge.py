@@ -602,9 +602,9 @@ class CurrentSquare(urwid.Edit):
     super(CurrentSquare,self).__init__(edit_text="",align="left",multiline=True)
     self.cursorCords = (0,0)
 
-  def render(self,size,focus=None):
+  def render(self,size,focus=False):
     self.move_cursor_to_coords(size,self.cursorCords[0],self.cursorCords[1])
-    return super(CurrentSquare,self).render(size,True)
+    return super(CurrentSquare,self).render(size,focus=focus)
 
   def keypress(self,size,key):
     if key in keybindings['new-square-streeted-to-previous-square']:
@@ -660,20 +660,20 @@ class StreetNavigator(urwid.ListBox):
     if not self.streets:
       items.append(urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(" ",0),align=self.alignment,width="pack"),None,self.selectionCollor))
     for street in self.streets:
-      if self.alignment == 'right':
-        if self.view.mode == 'command':
-          items.append(urwid.Columns([urwid.Text(street.name),urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(" → " + self.view.graph[street.destination].title,0),width="pack"),None,self.selectionCollor)]))
-        elif self.view.mode == 'insert':
-          edit = urwid.Edit(edit_text=street.name)
-          self.streetNameEdits.append(edit)
-          items.append(urwid.Columns([edit,urwid.Text(" → " + self.view.graph[street.destination].title)]))
-      elif self.alignment == 'left':
+      if self.alignment == 'left':
         if self.view.mode == 'command':
           items.append(urwid.Columns([urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(self.view.graph[street.origin].title + " → ",0),width="pack"),None,self.selectionCollor),urwid.Text(street.name)]))
         elif self.view.mode == 'insert':
           edit = urwid.Edit(edit_text=street.name)
           self.streetNameEdits.append(edit)
           items.append(urwid.Columns([urwid.Text(self.view.graph[street.origin].title + " → "),edit]))
+      elif self.alignment == 'right':
+        if self.view.mode == 'command':
+          items.append(urwid.Columns([urwid.Text(street.name),urwid.AttrMap(urwid.Padding(urwid.SelectableIcon(" → " + self.view.graph[street.destination].title,0),width="pack"),None,self.selectionCollor)]))
+        elif self.view.mode == 'insert':
+          edit = urwid.Edit(edit_text=street.name)
+          self.streetNameEdits.append(edit)
+          items.append(urwid.Columns([edit,urwid.Text(" → " + self.view.graph[street.destination].title)]))
     self.body.clear()
     self.body.extend(items)
 
