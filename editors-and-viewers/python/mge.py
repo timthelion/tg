@@ -626,6 +626,8 @@ class CurrentSquare(urwid.Edit):
             if prevSelection != self.view.selection:
               self.view.selection = prevSelection
               break
+          if self.view.graph[self.view.selection].text is None:
+            self.view.selection = 0
         else:
           self.view.statusMessage = "Cannot delete square 0."
         self.view.update()
@@ -692,12 +694,14 @@ class StreetNavigator(urwid.ListBox):
           self.view.selection = self.streets[self.focus_position].destination
         elif self.alignment == 'left':
           self.view.selection = self.streets[self.focus_position].origin
-        self.view.update()
         if key == 'enter':
           self.view.focus_item = self.view.currentSquareWidget
           self.view.mode = 'insert'
+        self.view.update()
       else:
         self.newStreetToNewSquare()
+        self.view.focus_item = self.view.currentSquareWidget
+        self.view.mode = 'insert'
     if key in keybindings["delete-square"]:
       if self.street:
         squareId = self.streets[self.focus_position].destination
