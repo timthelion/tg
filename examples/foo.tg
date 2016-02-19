@@ -2,8 +2,9 @@
 # line 2 of test header
 
 ["foo\nbaro\nbaz", [["Main St.", 1]]]
-["bar", [["", 2], ["Main St.", 4]]]
+["bar", [["Lol", 2], ["Main St.", 4]]]
 ["baz", [["Washington St.", 0], ["Orchard Rd.", 3]]]
-["blah", []]
+["blah", [["Flah", 6]]]
 ["Hoo", [["Main St.", 5]]]
 ["Mal", [["Main St.", 3]]]
+["Moon", [["Intu", 0]]]

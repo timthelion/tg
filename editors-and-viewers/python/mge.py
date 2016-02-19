@@ -1026,4 +1026,4 @@ if __name__ == "__main__":
     sys.exit("mge expects to be passed a single file path for editing. Use --help for help.")
 
   graphView = GraphView(TextGraph(args[0]))
-  urwid.MainLoop(graphView,pallet).run()
+  urwid.MainLoop(graphView,pallet,handle_mouse=False).run()
