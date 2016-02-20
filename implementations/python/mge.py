@@ -422,6 +422,8 @@ class StreetNavigator(urwid.ListBox):
       return super(StreetNavigator,self).keypress(size,key)
     if key in keybindings['new-square']:
       self.newStreetToNewSquare()
+      self.view.focus_item = self.view.currentSquareWidget
+      self.view.mode = 'insert'
     if key in keybindings['set-default-street-name']:
       if self.streets:
         self.view.defaultStreetName = self.streets[self.focus_position].name
@@ -761,7 +763,7 @@ pallet = [('incommingStreet_selected', 'white', 'dark blue')
          ,('clipboard','white','dark gray')]
 
 if __name__ == "__main__":
-  parser = optparse.OptionParser(usage = "tg FILE",description = "Edit simple text graph file(tg file) using a simple,fast TUI interface.")
+  parser = optparse.OptionParser(usage = "mge FILE",description = "Edit simple text graph file(tg file) using a simple,fast TUI interface.")
   options,args = parser.parse_args(sys.argv[1:])
 
   if not len(args) == 1:
