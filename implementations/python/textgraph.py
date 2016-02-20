@@ -5,7 +5,7 @@
 #
 # Description:
 #
-# mge is a simple TUI Vim style modal editor for text graphs.
+# textgraph is a reference implementation for reading, writting, and manipulating text graphs.
 #
 ########################################################################
 #
@@ -70,6 +70,12 @@ class Square():
       return self.text.splitlines()[0]
     except IndexError:
       return "<blank-text>"
+
+  def lookupStreet(self,streetName):
+    for street in self.streets:
+      if street.name == streetName:
+        return street
+    raise KeyError("Square "+str(self.squareId)+" : "+self.text+" has no street named "+streetName)
 
 class TextGraph(list):
   def __init__(self,fileName):
