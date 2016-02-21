@@ -560,6 +560,12 @@ class StreetsList(StreetNavigator):
   def keypress(self,size,key):
     if self.view.mode == "insert":
       return super(StreetsList,self).keypress(size,key)
+    if key in keybindings['go-down-default-street']:
+      try:
+        self.view.selection = self.view.graph[self.view.selection].lookupStreet(self.view.defaultStreetName).destination
+        self.view.update()
+      except KeyError:
+        pass
     if key in keybindings['move-square-up']:
       sel = copy.deepcopy(self.view.graph[self.view.selection])
       fcp = self.focus_position
@@ -750,6 +756,7 @@ keybindings = {
  'clear-default-street-name': ['F'],
  # street navigator
  'set-default-street-name': ['f'],
+ 'go-down-default-street': ['g'],
  # stack area
  'remove-from-stack' : ['d'],
  'street-to-stack-item-no-pop' : ['ctrl right'],
