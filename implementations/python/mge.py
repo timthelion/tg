@@ -437,9 +437,19 @@ class StreetNavigator(urwid.ListBox):
     if self.view.mode == "insert":
       return super(StreetNavigator,self).keypress(size,key)
     if key in keybindings['new-square']:
-      self.newStreetToNewSquare()
+      self.view.selection = self.newStreetToNewSquare(useDefaultStreetName=True)
       self.view.focus_item = self.view.currentSquareWidget
       self.view.mode = 'insert'
+    if key in keybindings['new-square-with-blank-street-name']:
+      self.view.selection = self.newStreetToNewSquare(useDefaultStreetName=False)
+      self.view.focus_item = self.view.currentSquareWidget
+      self.view.mode = 'insert'
+      self.view.update()
+    if key in keybindings['new-square-setting-street-name']:
+      self.newStreetToNewSquare(useDefaultStreetName=False)
+      self.view.mode = 'insert'
+      self.view.update()
+      return None
     if key in keybindings['set-default-street-name']:
       if self.streets:
         self.view.defaultStreetName = self.streets[self.focus_position].name
@@ -455,9 +465,10 @@ class StreetNavigator(urwid.ListBox):
           self.view.mode = 'insert'
         self.view.update()
       else:
-        self.newStreetToNewSquare()
+        self.view.selection = self.newStreetToNewSquare()
         self.view.focus_item = self.view.currentSquareWidget
         self.view.mode = 'insert'
+        self.view.update()
     if key in keybindings["delete-square"]:
       if self.streets:
         squareId = self.streets[self.focus_position].destination
@@ -507,16 +518,17 @@ class IncommingStreetsList(StreetNavigator):
           self.view.graph.stageSquare(square)
       self.view.graph.applyChanges()
 
-  def newStreetToNewSquare(self):
+  def newStreetToNewSquare(self,useDefaultStreetName=True):
     self.view.recordChanges()
     squareId = self.view.graph.allocSquare()
-    square = Square(squareId,"",[Street(self.view.defaultStreetName,self.view.selection,squareId)])
-    self.view.selection = square.squareId
+    if useDefaultStreetName:
+      streetName = self.view.defaultStreetName
+    else:
+      streetName = ""
+    square = Square(squareId,"",[Street(streetName,self.view.selection,squareId)])
     self.view.graph.stageSquare(square)
     self.view.graph.applyChanges()
-    self.view.update()
-    self.view.focus_item = self.view.currentSquareWidget
-    self.view.mode = 'insert'
+    return square.squareId
 
   def keypress(self,size,key):
     if self.view.mode == "insert":
@@ -566,12 +578,13 @@ class StreetsList(StreetNavigator):
         self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
 
-  def newStreetToNewSquare(self):
+  def newStreetToNewSquare(self,useDefaultStreetName=True):
     self.view.recordChanges()
-    newSquareId = self.view.graph.newLinkedSquare(self.view.selection,self.view.defaultStreetName)
-    self.view.selection = newSquareId
-    self.view.update()
-    self.view.focus_item = self.view.currentSquareWidget
+    if useDefaultStreetName:
+      streetName = self.view.defaultStreetName
+    else:
+      streetName = ""
+    return self.view.graph.newLinkedSquare(self.view.selection,streetName)
 
   def keypress(self,size,key):
     if self.view.mode == "insert":
@@ -744,6 +757,8 @@ keybindings = {
  'move-square-up' : ['ctrl up'],
  'move-square-down' : ['ctrl down'],
  'new-square' : ['n'],
+ 'new-square-with-blank-street-name' : ['N'],
+ 'new-square-setting-street-name' : ['ctrl n'],
  'new-square-streeted-to-previous-square' : ['meta enter'],
  'remove-street-or-incommingStreet' : ['d'],
  'delete-square' : ['delete'],
