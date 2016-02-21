@@ -230,7 +230,11 @@ class GraphView(urwid.Frame):
         elif key in keybindings['jump-to-command-bar']:
           self.focus_item = self.commandBar
         elif key in keybindings['show-map']:
-          return self.graph.showDiagram(markedSquares={self.selection:{"fontcolor":"white","fillcolor":"black","style":"filled"}})
+          self.graph.showDiagram(markedSquares={self.selection:{"fontcolor":"white","fillcolor":"black","style":"filled"}})
+          return None
+        elif key in keybindings['show-map-of-neighborhood']:
+          self.graph.showDiagram(neighborhoodCenter = self.selection, neighborhoodLevel = 4,markedSquares={self.selection:{"fontcolor":"white","fillcolor":"black","style":"filled"}})
+          return None
         elif key in keybindings['go-down-default-street']:
           try:
             self.selection = self.graph[self.selection].lookupStreet(self.defaultStreetName).destination
@@ -758,7 +762,8 @@ keybindings = {
  'command-mode.redo' : ['ctrl r'],
  'insert-mode' : ['i'],
  'search-mode' : ['/'],
- 'show-map': ['m'],
+ 'show-map-of-neighborhood': ['m'],
+ 'show-map': ['M'],
  'clear-default-street-name': ['F'],
  'go-down-default-street': ['g'],
  'go-up-default-street': ['G'],

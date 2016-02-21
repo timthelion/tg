@@ -260,11 +260,42 @@ class TextGraph(list):
           sys.exit("Cannot load file "+self.fileName+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
       lineNo += 1
 
-  def dot(self,markedSquares={}):
+  def __neighborhood(self,center,level):
+    """
+    Returns a list of squares around a given square.
+    Level gives you some control over the size of the neighborhood.
+    """
+    neighborhood = set()
+    squareIdsInNeighborhood = set()
+    edge = [self[center]]
+    # Build neighborhood
+    for _ in range(0,level):
+      newEdge = []
+      for square in edge:
+        neighborhood.add(square)
+        squareIdsInNeighborhood.add(square.squareId)
+        for street in square.streets:
+          newEdge.append(self[street.destination])
+        for street in self.getIncommingStreets(square.squareId):
+          newEdge.append(self[street.origin])
+      edge = newEdge
+    # Remove streets that leave neighborhood.
+    finalNeighborhood = []
+    for square in neighborhood:
+      newSquare = copy.deepcopy(square)
+      newSquare.streets = [street for street in newSquare.streets if street.destination in squareIdsInNeighborhood]
+      finalNeighborhood.append(newSquare)
+    return finalNeighborhood
+
+  def dot(self,markedSquares={},neighborhoodCenter=None,neighborhoodLevel=4):
+    if neighborhoodCenter is None:
+      neighborhood = self
+    else:
+      neighborhood = self.__neighborhood(neighborhoodCenter,neighborhoodLevel)
     dot = "digraph graphname{\n"
     labels = ""
     edges = ""
-    for square in self:
+    for square in neighborhood:
       if square.text is not None:
         markings = ""
         if square.squareId in markedSquares:
@@ -278,8 +309,8 @@ class TextGraph(list):
     dot += "}"
     return dot
 
-  def showDiagram(self,markedSquares={}):
-    subprocess.Popen(["dot","-T","xlib","/dev/stdin"],stdin=subprocess.PIPE).communicate(input=self.dot(markedSquares).encode("ascii"))
+  def showDiagram(self,neighborhoodCenter = None,neighborhoodLevel = 4,markedSquares={}):
+    subprocess.Popen(["dot","-T","xlib","/dev/stdin"],stdin=subprocess.PIPE).communicate(input=self.dot(markedSquares=markedSquares,neighborhoodCenter=neighborhoodCenter,neighborhoodLevel=neighborhoodLevel).encode("ascii"))
 
   def save(self):
     with open(self.fileName,"w") as fd:
