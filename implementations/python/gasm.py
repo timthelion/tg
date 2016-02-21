@@ -45,19 +45,6 @@ def clearComments(string):
   return cleared
 
 def getSquareLabel(squareId):
-  """
-  letterId = str(squareId)
-  letterId = letterId.replace("1","A")
-  letterId = letterId.replace("2","B")
-  letterId = letterId.replace("3","C")
-  letterId = letterId.replace("4","D")
-  letterId = letterId.replace("5","E")
-  letterId = letterId.replace("6","F")
-  letterId = letterId.replace("7","G")
-  letterId = letterId.replace("8","H")
-  letterId = letterId.replace("9","I")
-  letterId = letterId.replace("0","J")
-  """
   return "square"+str(squareId)
 
 def translate(filepath):
