@@ -77,11 +77,10 @@ class Square():
         return street
     raise KeyError("Square "+str(self.squareId)+" : "+self.text+" has no street named "+streetName)
 
-class TextGraph(list):
+class TextGraph(dict):
   def __init__(self,fileName):
     self.fileName = fileName
     self.edited = False
-    self.deleted = []
     self.stagedSquares = []
     self.undone = []
     self.done = []
@@ -90,21 +89,17 @@ class TextGraph(list):
       with open(fileName) as fd:
         self.json = fd.read()
     except FileNotFoundError:
-      self.append(Square(0,"",[]))
-    for square in self:
-      if square.text is None:
-        self.deleted.append(square.squareId)
+      self[0] = Square(0,"",[])
+      self.nextSquareId = 1
 
   def allocSquare(self):
     """
     Return a new or free square Id.
     """
-    if self.deleted:
-      return self.deleted.pop()
-    else:
-      squareId = len(self)
-      self.append(Square(squareId,None,[]))
-      return squareId
+    squareId = self.nextSquareId
+    self.nextSquareId += 1
+    self[squareId] = Square(squareId,None,[])
+    return squareId
 
   def stageSquare(self,square):
     self.stagedSquares.append(copy.deepcopy(square))
@@ -113,16 +108,15 @@ class TextGraph(list):
     didNow = []
     didSomething = False
     for square in self.stagedSquares:
-      if square.text is None:
-        self.deleted.append(square.squareId)
-      elif square.squareId in self.deleted:
-        self.deleted.remove(square.squareId)
       prevState = self[square.squareId]
       didNow.append((copy.deepcopy(prevState),copy.deepcopy(square)))
-      if not (prevState.text == square.text and prevState.streets == square.streets):
+      if square.text is None:
+        del self[square.squareId]
         didSomething = True
+      elif not (prevState.text == square.text and prevState.streets == square.streets):
         prevState.text = square.text
         prevState.streets = copy.deepcopy(square.streets)
+        didSomething = True
     if didSomething:
       self.undone = []
       self.stagedSquares = []
@@ -138,9 +132,7 @@ class TextGraph(list):
       return
     self.edited = True
     for (prevState,postState) in transaction:
-      currentState = self[prevState.squareId]
-      currentState.text = prevState.text
-      currentState.streets = copy.deepcopy(prevState.streets)
+      self[prevState.squareId] = copy.deepcopy(prevState)
     self.undone.append(transaction)
 
   def redo(self):
@@ -150,26 +142,15 @@ class TextGraph(list):
       return
     self.edited = True
     for (prevState,postState) in transaction:
-      currentState = self[postState.squareId]
-      currentState.text = postState.text
-      currentState.streets = copy.deepcopy(postState.streets)
+      if postState.text is not None:
+        self[postState.squareId] = copy.deepcopy(postState)
+      else:
+        del self[postState.squareId]
     self.done.append(transaction)
-
-  def trimBlankSquaresFromEnd(self):
-    try:
-      square = self.pop()
-    except IndexError:
-      pass
-    if not square.text is None:
-      self.append(square)
-    else:
-      self.deleted.remove(square.squareId)
-      # I am not sure if the return makes for tail recursion, but I hope so.
-      return self.trimBlankSquaresFromEnd()
 
   def getIncommingStreets(self,squareId):
     incommingStreets = []
-    for square in self:
+    for square in self.values():
       for street in square.streets:
         if squareId == street.destination:
           incommingStreets.append(street)
@@ -230,10 +211,9 @@ class TextGraph(list):
 
   @property
   def json(self):
-    self.trimBlankSquaresFromEnd()
     serialized = self.header
-    for square in self:
-      serialized += json.dumps([square.text,square.streets])
+    for _,square in sorted(self.items()):
+      serialized += json.dumps([square.squareId,square.text,square.streets])
       serialized += "\n"
     return serialized
 
@@ -241,8 +221,8 @@ class TextGraph(list):
   def json(self,text):
     self.header = ""
     readingHeader = True
-    squareId = 0
     lineNo = 0
+    sqr = 0
     for line in text.splitlines():
       if not line or line.startswith("#"):
         if readingHeader:
@@ -250,12 +230,11 @@ class TextGraph(list):
       else:
         readingHeader = False
         try:
-          (text,streetsList) = json.loads(line)
+          (squareId,text,streetsList) = json.loads(line)
           streets = []
           for streetName,destination in streetsList:
             streets.append(Street(streetName,destination,squareId))
-          self.append(Square(squareId,text,streets))
-          squareId += 1
+          self[squareId] = Square(squareId,text,streets)
         except ValueError as e:
           sys.exit("Cannot load file "+self.fileName+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
       lineNo += 1
@@ -289,7 +268,7 @@ class TextGraph(list):
 
   def dot(self,markedSquares={},neighborhoodCenter=None,neighborhoodLevel=4):
     if neighborhoodCenter is None:
-      neighborhood = self
+      neighborhood = self.values()
     else:
       neighborhood = self.__neighborhood(neighborhoodCenter,neighborhoodLevel)
     dot = "digraph graphname{\n"

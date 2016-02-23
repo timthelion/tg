@@ -456,10 +456,7 @@ class StreetNavigator(urwid.ListBox):
     if key in [self.alignment,'enter']:
       if self.streets:
         self.view.recordChanges()
-        if self.alignment == 'right':
-          self.view.selection = self.streets[self.focus_position].destination
-        elif self.alignment == 'left':
-          self.view.selection = self.streets[self.focus_position].origin
+        self.view.selection = self.selectedSquareId
         if key == 'enter':
           self.view.focus_item = self.view.currentSquareWidget
           self.view.mode = 'insert'
@@ -471,7 +468,7 @@ class StreetNavigator(urwid.ListBox):
         self.view.update()
     if key in keybindings["delete-square"]:
       if self.streets:
-        squareId = self.streets[self.focus_position].destination
+        squareId = self.selectedSquareId
         if squareId != 0:
           self.view.graph.deleteSquare(squareId)
           self.view.update()
@@ -479,7 +476,7 @@ class StreetNavigator(urwid.ListBox):
           self.view.statusMessage = "Cannot delete square 0."
     if key in keybindings["delete-tree"]:
       if self.streets:
-        squareId = self.streets[self.focus_position].destination
+        squareId = self.selectedSquareId
         if squareId != 0:
           self.view.graph.deleteTree(squareId)
           self.view.update()
@@ -487,7 +484,7 @@ class StreetNavigator(urwid.ListBox):
           self.view.statusMessage = "Cannot delete square 0."
     if key in keybindings["add-to-stack"]:
       if self.streets:
-        self.view.clipboard.squares.append(self.view.graph[self.streets[self.focus_position].destination])
+        self.view.clipboard.squares.append(self.view.graph[self.selectedSquareId])
         fcp = self.focus_position
         self.view.update()
         self.focus_position = fcp
@@ -517,6 +514,13 @@ class IncommingStreetsList(StreetNavigator):
         if changed:
           self.view.graph.stageSquare(square)
       self.view.graph.applyChanges()
+
+  @property
+  def selectedSquareId(self):
+    """
+    The square that the selected street points to, in the direction going away from the current square.
+    """
+    return self.streets[self.focus_position].origin
 
   def newStreetToNewSquare(self,useDefaultStreetName=True):
     self.view.recordChanges()
@@ -577,6 +581,13 @@ class StreetsList(StreetNavigator):
       if changed:
         self.view.graph.stageSquare(square)
         self.view.graph.applyChanges()
+
+  @property
+  def selectedSquareId(self):
+    """
+    The square that the selected street points to, in the direction going away from the current square.
+    """
+    return self.streets[self.focus_position].destination
 
   def newStreetToNewSquare(self,useDefaultStreetName=True):
     self.view.recordChanges()
@@ -645,7 +656,7 @@ class StreetsList(StreetNavigator):
 class SearchBox(urwid.ListBox):
   def __init__(self,view):
     self.view = view
-    self.squares = self.view.graph
+    self.squares = self.view.graph.values()
     super(SearchBox,self).__init__(urwid.SimpleFocusListWalker([]))
     self.searchEdit = urwid.Edit()
     self.body.append(self.searchEdit)
@@ -654,7 +665,7 @@ class SearchBox(urwid.ListBox):
   def update(self):
     self.squares = []
     items = []
-    for square in self.view.graph:
+    for square in self.view.graph.values():
       if square.text is not None:
         if self.searchEdit.edit_text in square.text:
           self.squares.append(square)
