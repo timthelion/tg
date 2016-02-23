@@ -78,19 +78,27 @@ class Square():
     raise KeyError("Square "+str(self.squareId)+" : "+self.text+" has no street named "+streetName)
 
 class TextGraph(dict):
-  def __init__(self,fileName):
-    self.fileName = fileName
+  def __init__(self,filename):
+    self.filename = filename
     self.edited = False
     self.stagedSquares = []
     self.undone = []
     self.done = []
     self.header = ""
-    try:
-      with open(fileName) as fd:
-        self.json = fd.read()
-    except FileNotFoundError:
-      self[0] = Square(0,"",[])
-      self.nextSquareId = 1
+    if filename.startswith("http://"):
+      import urllib.request
+      try:
+        with urllib.request.urlopen(filename) as webgraph:
+          self.json = webgraph.read().decode("utf-8")
+      except urllib.error.URLError as e:
+        sys.exit(str(e))
+    else:
+      try:
+        with open(filename) as fd:
+          self.json = fd.read()
+      except FileNotFoundError:
+        self[0] = Square(0,"",[])
+        self.nextSquareId = 1
 
   def allocSquare(self):
     """
@@ -236,7 +244,7 @@ class TextGraph(dict):
             streets.append(Street(streetName,destination,squareId))
           self[squareId] = Square(squareId,text,streets)
         except ValueError as e:
-          sys.exit("Cannot load file "+self.fileName+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
+          sys.exit("Cannot load file "+self.filename+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
       lineNo += 1
 
   def __neighborhood(self,center,level):
@@ -292,13 +300,19 @@ class TextGraph(dict):
     subprocess.Popen(["dot","-T","xlib","/dev/stdin"],stdin=subprocess.PIPE).communicate(input=self.dot(markedSquares=markedSquares,neighborhoodCenter=neighborhoodCenter,neighborhoodLevel=neighborhoodLevel).encode("ascii"))
 
   def save(self):
-    with open(self.fileName,"w") as fd:
+    if self.filename.startswith("http://"):
+      raise OSError(self.filename + " is read only.")
+    with open(self.filename,"w") as fd:
       fd.write(self.json)
 
   def saveDraft(self):
-    with open(os.path.join(os.path.dirname(self.fileName),"."+os.path.basename(self.fileName)+".draft"),"w") as fd:
+    if self.filename.startswith("http://"):
+      return
+    with open(os.path.join(os.path.dirname(self.filename),"."+os.path.basename(self.filename)+".draft"),"w") as fd:
       fd.write(self.json)
 
   def saveDot(self):
-    with open(self.fileName+".dot","w") as fd:
+    if self.filename.startswith("http://"):
+      raise OSError(self.filename + " is read only.")
+    with open(self.filename+".dot","w") as fd:
       fd.write(self.dot())

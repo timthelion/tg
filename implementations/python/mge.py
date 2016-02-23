@@ -726,7 +726,10 @@ class CommandBar(urwid.Edit):
     com = self.edit.edit_text
     if com == "savedot":
       success = True
-      self.view.graph.saveDot()
+      try:
+        self.view.graph.saveDot()
+      except OSError as e:
+        self.view.statusMessage = str(e)
     else:
       if "w" in com:
         success = True
@@ -734,7 +737,7 @@ class CommandBar(urwid.Edit):
           self.view.recordChanges()
           self.view.graph.save()
           self.view.graph.edited = False
-        except FileNotFoundError as e:
+        except (FileNotFoundError,OSError) as e:
           self.edit.set_caption("Unable to save:"+str(e)+"\n:")
       if "q" in com:
         success = True
@@ -754,9 +757,9 @@ class CommandBar(urwid.Edit):
           self.edit.set_caption("Cannot jump to "+com+". Square does not exist.\n:")
       except ValueError:
         pass
+    self.edit.edit_text = ""
     if success:
       self.view.focus_item = self.view.currentSquareWidget
-      self.edit.edit_text = ""
     else:
       self.edit.set_caption(com + " is not a valid mge command.\n:")
 
