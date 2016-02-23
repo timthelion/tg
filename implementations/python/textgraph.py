@@ -85,6 +85,7 @@ class TextGraph(dict):
     self.undone = []
     self.done = []
     self.header = ""
+    self.nextSquareId = 0
     if filename.startswith("http://"):
       import urllib.request
       try:
@@ -113,6 +114,9 @@ class TextGraph(dict):
     self.stagedSquares.append(copy.deepcopy(square))
 
   def applyChanges(self):
+    if self.readonly:
+      self.stagedSquares = []
+      return
     didNow = []
     didSomething = False
     for square in self.stagedSquares:
@@ -218,6 +222,10 @@ class TextGraph(dict):
     self.applyChanges()
 
   @property
+  def readonly(self):
+    return self.filename.startswith("http://")
+
+  @property
   def json(self):
     serialized = self.header
     for _,square in sorted(self.items()):
@@ -243,6 +251,8 @@ class TextGraph(dict):
           for streetName,destination in streetsList:
             streets.append(Street(streetName,destination,squareId))
           self[squareId] = Square(squareId,text,streets)
+          if squareId >= self.nextSquareId:
+            self.nextSquareId = squareId + 1
         except ValueError as e:
           sys.exit("Cannot load file "+self.filename+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
       lineNo += 1
@@ -300,19 +310,19 @@ class TextGraph(dict):
     subprocess.Popen(["dot","-T","xlib","/dev/stdin"],stdin=subprocess.PIPE).communicate(input=self.dot(markedSquares=markedSquares,neighborhoodCenter=neighborhoodCenter,neighborhoodLevel=neighborhoodLevel).encode("ascii"))
 
   def save(self):
-    if self.filename.startswith("http://"):
+    if self.readonly:
       raise OSError(self.filename + " is read only.")
     with open(self.filename,"w") as fd:
       fd.write(self.json)
 
   def saveDraft(self):
-    if self.filename.startswith("http://"):
+    if self.readonly:
       return
     with open(os.path.join(os.path.dirname(self.filename),"."+os.path.basename(self.filename)+".draft"),"w") as fd:
       fd.write(self.json)
 
   def saveDot(self):
-    if self.filename.startswith("http://"):
+    if self.readonly:
       raise OSError(self.filename + " is read only.")
     with open(self.filename+".dot","w") as fd:
       fd.write(self.dot())

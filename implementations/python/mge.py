@@ -86,7 +86,9 @@ class GraphView(urwid.Frame):
     self.streets.update(self.graph[self.selection].streets)
 
   def updateStatusBar(self):
-    if self.graph.edited:
+    if self.graph.readonly:
+      edited = "Read only!"
+    elif self.graph.edited:
       edited = "Edited"
     else:
       edited = "Saved"
@@ -166,7 +168,11 @@ class GraphView(urwid.Frame):
     if self.mode == 'search':
       return self.keypressSearchmode(size, key)
     focusedBeforeProcessing = self.focus_item
-    value = self.handleKeypress(size,key)
+    try:
+      value = self.handleKeypress(size,key)
+    except AttributeError as e:
+      self.statusMessage = str(e)
+      value = None
     if key in keybindings['command-mode.down'] and focusedBeforeProcessing == self.currentSquareWidget and self.focus_item == self.streets:
       self.streets.focus_position = 0
     self.updateStatusBar()
