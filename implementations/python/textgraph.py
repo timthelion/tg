@@ -86,6 +86,7 @@ class TextGraph(dict):
     self.done = []
     self.header = ""
     self.nextSquareId = 0
+    self.applyChangesHandler = lambda: None
     if filename.startswith("http://"):
       import urllib.request
       try:
@@ -136,6 +137,7 @@ class TextGraph(dict):
       if len(self.done)%5 == 0:
         self.saveDraft()
       self.edited = True
+      self.applyChangesHandler()
 
   def undo(self):
     try:
