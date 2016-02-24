@@ -739,8 +739,11 @@ class CommandBar(urwid.Edit):
         _,filename = com.split()
       except ValueError:
         self.view.statusMessage = "Need a path/URL to a file to open!"
-      self.editor.graphViews.append(GraphView(TextGraph(filename),self.editor))
-      self.editor.currentTab = len(self.editor.graphViews) - 1
+      try:
+        self.editor.graphViews.append(GraphView(TextGraph(filename),self.editor))
+        self.editor.currentTab = len(self.editor.graphViews) - 1
+      except (OSError,ValueError) as e:
+        self.view.statusMessage = str(e)
     else:
       if "w" in com:
         success = True
@@ -831,4 +834,8 @@ if __name__ == "__main__":
   if not len(args) >= 1:
     sys.exit("mge expects to be passed at least one file path for editing. Use --help for help.")
 
-  urwid.MainLoop(MultiTabEditor(args),pallet,handle_mouse=False).run()
+  try:
+    editor = MultiTabEditor(args)
+  except (OSError,ValueError) as e:
+    sys.exit(str(e))
+  urwid.MainLoop(editor,pallet,handle_mouse=False).run()

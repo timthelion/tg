@@ -93,7 +93,7 @@ class TextGraph(dict):
         with urllib.request.urlopen(filename) as webgraph:
           self.json = webgraph.read().decode("utf-8")
       except urllib.error.URLError as e:
-        sys.exit(str(e))
+        raise OSError(str(e))
     else:
       try:
         with open(filename) as fd:
@@ -256,7 +256,7 @@ class TextGraph(dict):
           if squareId >= self.nextSquareId:
             self.nextSquareId = squareId + 1
         except ValueError as e:
-          sys.exit("Cannot load file "+self.filename+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
+          raise ValueError("Cannot load file "+self.filename+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
       lineNo += 1
 
   def __neighborhood(self,center,level):
