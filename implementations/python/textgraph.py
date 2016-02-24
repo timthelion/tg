@@ -148,6 +148,7 @@ class TextGraph(dict):
     for (prevState,postState) in transaction:
       self[prevState.squareId] = copy.deepcopy(prevState)
     self.undone.append(transaction)
+    self.applyChangesHandler()
 
   def redo(self):
     try:
@@ -161,6 +162,7 @@ class TextGraph(dict):
       else:
         del self[postState.squareId]
     self.done.append(transaction)
+    self.applyChangesHandler()
 
   def getIncommingStreets(self,squareId):
     incommingStreets = []
