@@ -436,8 +436,14 @@ class StreetNavigator(urwid.ListBox):
           edit = urwid.Edit(edit_text=street.name)
           self.streetNameEdits.append(edit)
           items.append(urwid.Columns([edit,urwid.Text(" → " + self.view.graph[street.destination].title)]))
+    try:
+      fp = self.focus_position
+    except IndexError:
+      fp = 0
     self.body.clear()
     self.body.extend(items)
+    if fp < len(items):
+      self.focus_position = fp
 
   def keypress(self,size,key):
     if self.view.mode == "insert":
