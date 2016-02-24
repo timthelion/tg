@@ -124,6 +124,7 @@ class GraphView(urwid.WidgetPlaceholder):
     self.updateStatusBar()
     self.focus_item = self.currentSquareWidget
     self.update()
+    self.incommingStreets.focusLastStreet()
 
   def update(self):
     # incommingStreets
@@ -179,6 +180,7 @@ class GraphView(urwid.WidgetPlaceholder):
     self.history.append(self.selection)
     self._selection = value
     self.update()
+    self.incommingStreets.focusLastStreet()
 
   @property
   def selectedSquare(self):
@@ -507,6 +509,12 @@ class StreetNavigator(urwid.ListBox):
 class IncommingStreetsList(StreetNavigator):
   def __init__(self,view):
     super(IncommingStreetsList,self).__init__(view,'incommingStreet_selected','left')
+
+  def focusLastStreet(self):
+    lastStreet = len(self.streets) - 1
+    if lastStreet < 0:
+      lastStreet = 0
+    self.focus_position = lastStreet
 
   def recordChanges(self):
     if self.view.mode == "insert":
