@@ -48,7 +48,7 @@ class MultiTabEditor(urwid.Frame):
       self.graphViews.append(GraphView(TextGraph(filename),self))
     self._currentTab = 0
     self.currentTab = 0
-    super(MultiTabEditor,self).__init__(self.graphViews[0],header=self.clipboardBoxAdapter,footer=urwid.BoxAdapter(urwid.ListBox(urwid.SimpleFocusListWalker([self.statusBar,urwid.AttrMap(self.tabTitle,"tabtitle"),self.commandBar])),height=3))
+    super(MultiTabEditor,self).__init__(self.graphViews[0],header=self.clipboardBoxAdapter,footer=urwid.BoxAdapter(urwid.ListBox(urwid.SimpleFocusListWalker([self.statusBar,urwid.AttrMap(self.tabTitle,"tabtitle"),self.commandBar])),height=4))
 
   @property
   def view(self):
@@ -107,7 +107,7 @@ class GraphView(urwid.WidgetPlaceholder):
     self._selection = 0
     self.tabbedEditor = tabbedEditor
     self.history = []
-    self.statusMessage = ""
+    self._statusMessage = ""
     self.graph.applyChangesHandler = self.update
     # incommingStreets
     self.incommingStreets = IncommingStreetsList(self)
@@ -210,6 +210,14 @@ class GraphView(urwid.WidgetPlaceholder):
       self.update()
     else:
       raise ValueError("Invalid mode"+value)
+
+  @property
+  def statusMessage(self):
+    return self._statusMessage
+  @statusMessage.setter
+  def statusMessage(self,value):
+    self._statusMessage = value
+    self.updateStatusBar()
 
   def keypress(self,size,key):
     if self.mode == 'search':
