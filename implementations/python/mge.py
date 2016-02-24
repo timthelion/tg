@@ -59,20 +59,19 @@ class MultiTabEditor(urwid.Frame):
     return self._currentTab
   @currentTab.setter
   def currentTab(self,currentTab):
+    self._currentTab = currentTab
     self.body = self.graphViews[currentTab]
     self.tabTitle.set_text("["+str(currentTab+1)+"/"+str(len(self.graphViews))+"] "+self.view.graph.filename)
-    self._currentTab = currentTab
+    self.view.updateStatusBar()
 
   def keypress(self,size,key):
     value = None
     if key in keybindings['next-tab']:
-      self.currentTab += 1
-      if self.currentTab >= len(self.graphViews):
-        self.currentTab -= 1
+      if self.currentTab < len(self.graphViews) - 1:
+        self.currentTab += 1
     elif key in keybindings['prev-tab']:
-      self.currentTab -= 1
-      if self.currentTab < 0:
-        self.currentTab = 0
+      if self.currentTab > 0:
+        self.currentTab -= 1
     elif key == 'esc':
       if self.focus_position != 'body':
         self.focus_position = 'body'
@@ -94,7 +93,7 @@ class MultiTabEditor(urwid.Frame):
         self.focus_position = 'header'
       elif self.focus_position == 'header':
         pass
-    elif key in keybindings['jump-to-command-bar']:
+    elif key in keybindings['jump-to-command-bar'] and self.focus_position != 'footer':
       self.focus_position = 'footer'
     else:
       value = super(MultiTabEditor,self).keypress(size,key)
@@ -734,6 +733,14 @@ class CommandBar(urwid.Edit):
         self.view.graph.saveDot()
       except OSError as e:
         self.view.statusMessage = str(e)
+    elif com.startswith("o "):
+      success = True
+      try:
+        _,filename = com.split()
+      except ValueError:
+        self.view.statusMessage = "Need a path/URL to a file to open!"
+      self.editor.graphViews.append(GraphView(TextGraph(filename),self.editor))
+      self.editor.currentTab = len(self.editor.graphViews) - 1
     else:
       if "w" in com:
         success = True
@@ -762,7 +769,7 @@ class CommandBar(urwid.Edit):
         pass
     self.edit.edit_text = ""
     if success:
-      self.view.focus_item = self.view.currentSquareWidget
+      self.editor.focus_position = 'body'
     else:
       self.edit.set_caption(com + " is not a valid mge command.\n:")
 
