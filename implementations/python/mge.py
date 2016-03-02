@@ -79,7 +79,7 @@ class MultiTabEditor(urwid.Frame):
         return super(MultiTabEditor,self).keypress(size,key)
     elif key in keybindings['jump-to-command-bar'] and self.focus_position != 'footer':
       self.focus_position = 'footer'
-    elif key in keybindings['jump-to-stack-area']:
+    elif key in keybindings['jump-to-stack-area'] and self.focus_position == 'body':
       self.focus_position = 'header'
     else:
       value = super(MultiTabEditor,self).keypress(size,key)
