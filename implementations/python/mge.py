@@ -803,7 +803,7 @@ keybindings = {
  'move-square-up' : ['ctrl up'],
  'move-square-down' : ['ctrl down'],
  'new-square' : ['n'],
- 'new-square-with-blank-street-name' : ['N'],
+ 'new-square-with-blank-street-name' : ['meta n'],
  'new-square-setting-street-name' : ['ctrl n'],
  'new-square-streeted-to-previous-square' : ['meta enter'],
  'remove-street-or-incommingStreet' : ['d'],
