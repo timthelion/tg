@@ -113,6 +113,15 @@ class GraphView(urwid.WidgetPlaceholder):
     self.incommingStreets.focusLastStreet()
 
   def update(self):
+    # Make sure the selected square still exists...
+    if self.selection not in self.graph:
+      while self.history:
+        prevSelection = self.history.pop()
+        if prevSelection in self.graph and self.graph[prevSelection].text is not None:
+          self.selection = prevSelection
+          break
+      if not self.history:
+        self.selection = 0
     # incommingStreets
     incommingStreets = []
     for incommingStreet in self.graph.getIncommingStreets(self.selection):
@@ -375,13 +384,6 @@ class CurrentSquare(urwid.Edit):
       elif key in keybindings['delete-square']:
         if self.view.selection != 0:
           self.view.graph.deleteSquare(self.view.selection)
-          while True:
-            prevSelection = self.view.history.pop()
-            if prevSelection != self.view.selection:
-              self.view.selection = prevSelection
-              break
-          if self.view.selectedSquare.text is None:
-            self.view.selection = 0
         else:
           self.view.statusMessage = "Cannot delete square 0."
       elif key in keybindings['delete-tree']:
