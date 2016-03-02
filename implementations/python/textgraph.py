@@ -147,6 +147,8 @@ class TextGraph(dict):
     self.edited = True
     for (prevState,postState) in transaction:
       self[prevState.squareId] = copy.deepcopy(prevState)
+      if prevState.text is None:
+        del self[prevState.squareId]
     self.undone.append(transaction)
     self.applyChangesHandler()
 
