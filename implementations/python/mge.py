@@ -77,24 +77,10 @@ class MultiTabEditor(urwid.Frame):
         self.focus_position = 'body'
       else:
         return super(MultiTabEditor,self).keypress(size,key)
-    elif key in keybindings['move-down-one-mega-widget']:
-      if self.focus_position == 'header':
-        self.focus_position = 'body'
-      elif self.focus_position == 'body':
-        self.view.recordChanges()
-        self.focus_position = 'footer'
-      elif self.focus_position == 'footer':
-        pass
-    elif key in keybindings['move-up-one-mega-widget']:
-      if self.focus_position == 'footer':
-        self.focus_position = 'body'
-      elif self.focus_position == 'body':
-        self.view.recordChanges()
-        self.focus_position = 'header'
-      elif self.focus_position == 'header':
-        pass
     elif key in keybindings['jump-to-command-bar'] and self.focus_position != 'footer':
       self.focus_position = 'footer'
+    elif key in keybindings['jump-to-stack-area']:
+      self.focus_position = 'header'
     else:
       value = super(MultiTabEditor,self).keypress(size,key)
     return value
@@ -253,9 +239,6 @@ class GraphView(urwid.WidgetPlaceholder):
         if key in keybindings["back"]:
           if self.history:
             self._selection = self.history.pop()
-        elif key in keybindings['move-to-square-zero']:
-          self.selection = 0
-          self.focus_item = self.currentSquareWidget
         elif key in keybindings['search-mode']:
           self.mode = 'search'
           self.searchBox.searchEdit.edit_text = ""
@@ -794,8 +777,8 @@ class CommandBar(urwid.Edit):
 
 keybindings = {
  # Superglobal / multitab editor
- 'next-tab': ['ctrl up'],
- 'prev-tab': ['ctrl down'],
+ 'next-tab': ['meta page down'],
+ 'prev-tab': ['meta page up'],
  # global/command-mode
  'back' : ['meta left','b'],
  'street-or-back-street-last-stack-item' : ['p'],
@@ -809,11 +792,9 @@ keybindings = {
  'remove-street-or-incommingStreet' : ['d'],
  'delete-square' : ['delete'],
  'delete-tree' : ['ctrl delete'],
- 'move-to-square-zero' : ['.'],
  'jump-to-command-bar' : [':'],
+ 'jump-to-stack-area' : ['s'],
  'leave-and-go-to-mainer-part' : ['esc'],
- 'move-up-one-mega-widget' : ['meta up'],
- 'move-down-one-mega-widget' : ['meta down'],
  'command-mode' : ['esc'],
  'command-mode.up' : ['k'],
  'command-mode.down' : ['j'],
