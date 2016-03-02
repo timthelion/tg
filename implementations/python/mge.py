@@ -326,11 +326,15 @@ class Clipboard(urwid.ListBox):
 
   def keypress(self,size,key):
     if key in keybindings["remove-from-stack"]:
-      fcp = self.focus_position
-      del self.squares[fcp]
-      self.update()
-      if fcp < len(self.squares):
-        self.focus_position = fcp
+      try:
+        fcp = self.focus_position
+      except IndexError:
+        pass
+      else:
+        del self.squares[fcp]
+        self.update()
+        if fcp < len(self.squares):
+          self.focus_position = fcp
     if key in keybindings['street-to-stack-item'] or key in keybindings['street-to-stack-item-no-pop']:
       try:
         fcp = self.focus_position
