@@ -99,8 +99,10 @@ class TextGraph(dict):
         with open(filename) as fd:
           self.json = fd.read()
       except FileNotFoundError:
-        self[0] = Square(0,"",[])
-        self.nextSquareId = 1
+        pass
+    if not 0 in self:
+      self[0] = Square(0,"",[])
+      self.nextSquareId = 1
 
   def allocSquare(self):
     """
@@ -257,8 +259,11 @@ class TextGraph(dict):
           for streetName,destination in streetsList:
             streets.append(Street(streetName,destination,squareId))
           self[squareId] = Square(squareId,text,streets)
-          if squareId >= self.nextSquareId:
-            self.nextSquareId = squareId + 1
+          try:
+            if squareId >= self.nextSquareId:
+              self.nextSquareId = squareId + 1
+          except TypeError:
+            pass
         except ValueError as e:
           raise ValueError("Cannot load file "+self.filename+"\n"+ "Error on line: "+str(lineNo)+"\n"+str(e))
       lineNo += 1
