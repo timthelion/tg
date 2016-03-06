@@ -26,12 +26,14 @@ import copy
 import json
 import subprocess
 import os
+import collections.abc
 
 class Street(list):
-  def __init__(self,name,destination,origin):
+  def __init__(self,name,destination,origin,readonly = False):
     self.append(name)
     self.append(destination)
     self.origin = origin
+    self.readonly = readonly
 
   @property
   def name(self):
@@ -50,19 +52,29 @@ class Street(list):
     self[1] = value
 
   def __repr__(self):
-    return self.name + "→" + self.destination
+    return self.name + "→" + str(self.destination)
 
   def __eq__(self,other):
     return self.name == other.name and self.destination == other.destination
 
 class Square():
-  def __init__(self,squareId,text,streets):
+  def __init__(self,squareId,text,streets,readonly = False,incommingStreets=None):
     self.squareId = squareId
     self.text = text
     self.streets = streets
+    self.readonly = readonly
+    if incommingStreets is not None:
+      self.incommingStreets = incommingStreets
 
   def __repr__(self):
     return str((self.squareId,self.text,self.streets))
+
+  @property
+  def list(self):
+    streets = []
+    for street in self.streets:
+      streets.append([street.name,street.destination])
+    return [self.squareId,self.text,streets]
 
   @property
   def title(self):
@@ -77,7 +89,31 @@ class Square():
         return street
     raise KeyError("Square "+str(self.squareId)+" : "+self.text+" has no street named "+streetName)
 
-class TextGraph(dict):
+def getSquareFromList(square,permissions):
+  squareId,text,streetsAsLists,incommingStreetLists = square
+  _,textPermission,streetPermissions = permissions
+  streets = []
+  for (name,destination),streetPermission in zip(streetsAsLists,streetPermissions):
+    streets.append(Street(name,destination,squareId,streetPermission is not None))
+  incommingStreets = []
+  for origin,name,destination in incommingStreetLists:
+    incommingStreets.append(Street(name,destination,origin))
+  return Square(squareId,text,streets,readonly = textPermission is not None,incommingStreets = incommingStreets)
+
+class TextGraphServer():
+  def __init__(self,filename):
+    self.proc = subprocess.Popen(["./tgserve.py",filename],stdin=subprocess.PIPE,stdout=subprocess.PIPE,close_fds=True)
+
+  def send(self,query):
+    queryString = json.dumps(query)
+    queryString += "\n"
+    self.proc.stdin.write(queryString.encode("utf-8"))
+    self.proc.stdin.flush()
+    response = json.loads(self.proc.stdout.readline().decode("utf-8"))
+    returnCodes = json.loads(self.proc.stdout.readline().decode("utf-8"))
+    return (response,returnCodes)
+
+class TextGraph(collections.abc.MutableMapping):
   def __init__(self,filename):
     self.filename = filename
     self.edited = False
@@ -85,33 +121,39 @@ class TextGraph(dict):
     self.undone = []
     self.done = []
     self.header = ""
-    self.nextSquareId = 0
     self.applyChangesHandler = lambda: None
-    if filename.startswith("http://"):
-      import urllib.request
-      try:
-        with urllib.request.urlopen(filename) as webgraph:
-          self.json = webgraph.read().decode("utf-8")
-      except urllib.error.URLError as e:
-        raise OSError(str(e))
-    else:
-      try:
-        with open(filename) as fd:
-          self.json = fd.read()
-      except FileNotFoundError:
-        pass
-    if not 0 in self:
-      self[0] = Square(0,"",[])
-      self.nextSquareId = 1
+    self.server = TextGraphServer(filename)
+
+  def _getAllSquares(self):
+    allSquares = {}
+    response,returnCodes = self.server.send([])
+    for square,permissions in zip(response,returnCodes):
+      allSquares[square[0]] = getSquareFromList(square,permissions)
+    return allSquares
+
+  def __getitem__(self, key):
+    response,returnCodes = self.server.send([key])
+    return getSquareFromList(response[0],returnCodes[0])
+
+  def __setitem__(self, squareId, square):
+    self.server.send(square.list)
+
+  def __delitem__(self,key):
+    self.__setitem__(key,Square(key,None,[]))
+
+  def __iter__(self):
+    for square in self._getAllSquares():
+      yield square
+
+  def __len__(self):
+    return len(self._getAllSquares())
 
   def allocSquare(self):
     """
     Return a new or free square Id.
     """
-    squareId = self.nextSquareId
-    self.nextSquareId += 1
-    self[squareId] = Square(squareId,None,[])
-    return squareId
+    response,returnCodes = self.server.send([None])
+    return response[0][0]
 
   def stageSquare(self,square):
     self.stagedSquares.append(copy.deepcopy(square))
@@ -126,14 +168,12 @@ class TextGraph(dict):
       prevState = self[square.squareId]
       didNow.append((copy.deepcopy(prevState),copy.deepcopy(square)))
       if square.text is None:
-        del self[square.squareId]
         didSomething = True
       elif not (prevState.text == square.text and prevState.streets == square.streets):
-        prevState.text = square.text
-        prevState.streets = copy.deepcopy(square.streets)
         didSomething = True
     if didSomething:
       self.undone = []
+      self.server.send([square.list for square in self.stagedSquares])
       self.stagedSquares = []
       self.done.append(didNow)
       if len(self.done)%5 == 0:
@@ -168,14 +208,6 @@ class TextGraph(dict):
     self.done.append(transaction)
     self.applyChangesHandler()
 
-  def getIncommingStreets(self,squareId):
-    incommingStreets = []
-    for square in self.values():
-      for street in square.streets:
-        if squareId == street.destination:
-          incommingStreets.append(street)
-    return incommingStreets
-
   def newLinkedSquare(self,streetedSquareId,streetName):
     newSquareId = self.allocSquare()
     newSquare = Square(newSquareId,"",[])
@@ -191,7 +223,7 @@ class TextGraph(dict):
     Get the changes that need to be preformed in order to delete a square.
     """
     changes = []
-    for incommingStreet in self.getIncommingStreets(squareId):
+    for incommingStreet in self[squareId].incommingStreets:
       if incommingStreet != squareId:
         incommingStreetOrigin = copy.deepcopy(self[incommingStreet.origin])
         incommingStreetOrigin.streets = [street for street in incommingStreetOrigin.streets if street.destination != squareId]
@@ -234,9 +266,13 @@ class TextGraph(dict):
     return self.filename.startswith("http://")
 
   @property
+  def sorted_items(self):
+    return sorted(self.items(),key=str)
+
+  @property
   def json(self):
     serialized = self.header
-    for _,square in sorted(self.items()):
+    for _,square in self.sorted_items:
       serialized += json.dumps([square.squareId,square.text,square.streets])
       serialized += "\n"
     return serialized
@@ -280,17 +316,16 @@ class TextGraph(dict):
     for _ in range(0,level):
       newEdge = []
       for square in edge:
-        neighborhood.add(square)
         squareIdsInNeighborhood.add(square.squareId)
         for street in square.streets:
           newEdge.append(self[street.destination])
-        for street in self.getIncommingStreets(square.squareId):
+        for street in square.incommingStreets:
           newEdge.append(self[street.origin])
       edge = newEdge
     # Remove streets that leave neighborhood.
     finalNeighborhood = []
-    for square in neighborhood:
-      newSquare = copy.deepcopy(square)
+    for squareId in squareIdsInNeighborhood:
+      newSquare = copy.deepcopy(self[squareId])
       newSquare.streets = [street for street in newSquare.streets if street.destination in squareIdsInNeighborhood]
       finalNeighborhood.append(newSquare)
     return finalNeighborhood

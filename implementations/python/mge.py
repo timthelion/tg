@@ -124,7 +124,7 @@ class GraphView(urwid.WidgetPlaceholder):
         self.selection = 0
     # incommingStreets
     incommingStreets = []
-    for incommingStreet in self.graph.getIncommingStreets(self.selection):
+    for incommingStreet in self.graph[self.selection].incommingStreets:
       incommingStreets.append(copy.deepcopy(incommingStreet))
     self.incommingStreets.update(incommingStreets)
     # current square
